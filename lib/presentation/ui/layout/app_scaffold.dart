@@ -25,7 +25,7 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pageTitle = browserTitle ?? title ?? "Come Out Singin'";
+    final pageTitle = browserTitle ?? title ?? 'Theatre 121';
 
     return Title(
       color: Theme.of(context).primaryColor,
