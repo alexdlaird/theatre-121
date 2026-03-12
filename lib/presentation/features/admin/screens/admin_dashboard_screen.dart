@@ -61,8 +61,9 @@ class AdminDashboardView extends StatelessWidget {
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const SelectableText('Spreadsheet generated successfully'),
+                content: const Text('Spreadsheet generated successfully'),
                 duration: const Duration(seconds: 4),
+                showCloseIcon: true,
                 action: SnackBarAction(
                   label: 'Open Sheet',
                   onPressed: () {
@@ -348,10 +349,10 @@ class AdminDashboardView extends StatelessWidget {
                 const Spacer(),
                 IconButton(
                   onPressed: () {
-                    context.read<AdminBloc>().add(const RerunExport());
+                    context.read<AdminBloc>().add(const RefetchResults());
                   },
                   icon: const Icon(Icons.refresh, size: 20),
-                  tooltip: 'Rerun results',
+                  tooltip: 'Refetch results',
                 ),
                 TextButton.icon(
                   onPressed: () {
@@ -564,6 +565,26 @@ class AdminDashboardView extends StatelessWidget {
                 label: Text(state.isClosingVoting
                     ? state.closingProgressText
                     : 'Close Voting'),
+              )
+            else if (event?.isVotingOpen == false && event?.spreadsheetUrl == null)
+              ElevatedButton.icon(
+                onPressed: state.isClosingVoting
+                    ? null
+                    : () => context.read<AdminBloc>().add(const RetryExport()),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.colorScheme.error,
+                  foregroundColor: context.colorScheme.onError,
+                ),
+                icon: state.isClosingVoting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.upload),
+                label: Text(state.isClosingVoting
+                    ? state.closingProgressText
+                    : 'Re-Export Results'),
               ),
             const SizedBox(height: 12),
             OutlinedButton.icon(

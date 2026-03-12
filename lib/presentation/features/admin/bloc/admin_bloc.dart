@@ -68,8 +68,12 @@ class CloseVoting extends AdminEvent {
   const CloseVoting();
 }
 
-class RerunExport extends AdminEvent {
-  const RerunExport();
+class RefetchResults extends AdminEvent {
+  const RefetchResults();
+}
+
+class RetryExport extends AdminEvent {
+  const RetryExport();
 }
 
 class UpdateDonationWinner extends AdminEvent {
@@ -202,7 +206,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     on<_StreamError>(_onStreamError);
     on<CreateEvent>(_onCreateEvent);
     on<CloseVoting>(_onCloseVoting);
-    on<RerunExport>(_onRerunExport);
+    on<RetryExport>(_onRetryExport);
+    on<RefetchResults>(_onRefetchResults);
     on<UpdateDonationWinner>(_onUpdateDonationWinner);
   }
 
@@ -266,24 +271,15 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       // Only emit if ballots actually changed
       if (!const DeepCollectionEquality()
           .equals(currentState.ballots, event.ballots)) {
+        emit(currentState.copyWith(ballots: event.ballots));
+
+        // Fetch results from spreadsheet if event is closed and has spreadsheet URL
         final eventData = currentState.currentEvent;
-        // Recalculate results if event is closed and has spreadsheet URL
         if (eventData != null &&
             !eventData.isVotingOpen &&
             eventData.spreadsheetUrl != null &&
             currentState.votingResults == null) {
-          final results = _calculateResults(
-            event: eventData,
-            ballots: event.ballots,
-            spreadsheetUrl: eventData.spreadsheetUrl!,
-          );
-          emit(currentState.copyWith(
-            ballots: event.ballots,
-            votingResults: results,
-            closingProgress: ClosingProgress.complete,
-          ));
-        } else {
-          emit(currentState.copyWith(ballots: event.ballots));
+          add(const RefetchResults());
         }
       }
     }
@@ -362,12 +358,11 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       );
       await _eventRepository.updateSpreadsheetUrl(eventData.id, spreadsheetUrl);
 
-      // Step 3: Calculating results
+      // Step 3: Fetching results from spreadsheet
       currentState = currentState.copyWith(closingProgress: ClosingProgress.calculatingResults);
       emit(currentState);
-      final results = _calculateResults(
+      final results = await _fetchResults(
         event: eventData,
-        ballots: ballotData,
         spreadsheetUrl: spreadsheetUrl,
       );
 
@@ -386,82 +381,104 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     }
   }
 
-  void _onRerunExport(
-    RerunExport event,
+  Future<void> _onRetryExport(
+    RetryExport event,
     Emitter<AdminState> emit,
-  ) {
-    final currentState = state;
+  ) async {
+    var currentState = state;
     if (currentState is! AdminLoaded || currentState.currentEvent == null) {
       return;
     }
 
     final eventData = currentState.currentEvent!;
     final ballotData = currentState.ballots;
-    final spreadsheetUrl = eventData.spreadsheetUrl;
 
-    if (spreadsheetUrl == null) {
-      emit(const AdminError('No spreadsheet URL found. Close voting first.'));
+    try {
+      // Export ballots
+      currentState = currentState.copyWith(closingProgress: ClosingProgress.exportingBallots);
+      emit(currentState);
+      final spreadsheetUrl = await _sheetsService.createResultsSpreadsheet(
+        event: eventData,
+        ballots: ballotData,
+      );
+      await _eventRepository.updateSpreadsheetUrl(eventData.id, spreadsheetUrl);
+
+      // Fetch results from spreadsheet
+      currentState = currentState.copyWith(closingProgress: ClosingProgress.calculatingResults);
+      emit(currentState);
+      final results = await _fetchResults(
+        event: eventData,
+        spreadsheetUrl: spreadsheetUrl,
+      );
+
+      emit(currentState.copyWith(
+        closingProgress: ClosingProgress.complete,
+        votingResults: results,
+      ));
+    } catch (e) {
+      if (state is AdminLoaded) {
+        emit((state as AdminLoaded).copyWith(closingProgress: ClosingProgress.none));
+      }
+      emit(AdminError(e.toString()));
+    }
+  }
+
+  Future<void> _onRefetchResults(
+    RefetchResults event,
+    Emitter<AdminState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! AdminLoaded || currentState.currentEvent == null) {
       return;
     }
 
-    final results = _calculateResults(
-      event: eventData,
-      ballots: ballotData,
+    final eventData = currentState.currentEvent!;
+    final spreadsheetUrl = eventData.spreadsheetUrl;
+
+    if (spreadsheetUrl == null) {
+      emit(const AdminError('No spreadsheet URL found.'));
+      return;
+    }
+
+    try {
+      final results = await _fetchResults(
+        event: eventData,
+        spreadsheetUrl: spreadsheetUrl,
+      );
+
+      emit(currentState.copyWith(votingResults: results));
+    } catch (e) {
+      emit(AdminError(e.toString()));
+    }
+  }
+
+  Future<VotingResults> _fetchResults({
+    required EventModel event,
+    required String spreadsheetUrl,
+  }) async {
+    final fetchedResults = await _sheetsService.fetchResultsFromSpreadsheet(
       spreadsheetUrl: spreadsheetUrl,
     );
 
-    emit(currentState.copyWith(
-      votingResults: results,
-      closingProgress: ClosingProgress.complete,
-    ));
-  }
-
-  VotingResults _calculateResults({
-    required EventModel event,
-    required List<BallotModel> ballots,
-    required String spreadsheetUrl,
-  }) {
+    // Match fetched results to participant IDs by name
     final participants = event.participants;
-    final audienceBallots = ballots.where((b) => b.isAudience && b.submitted).toList();
-    final judgeBallots = ballots.where((b) => b.isJudge && b.submitted).toList();
-
-    final rankings = <ParticipantResult>[];
-
-    for (final participant in participants) {
-      // Calculate audience points (sum of rankings where lower is better)
-      int audiencePoints = 0;
-      for (final ballot in audienceBallots) {
-        final vote = ballot.audienceVotes[participant.id];
-        if (vote != null) {
-          audiencePoints += vote;
-        }
-      }
-
-      // Calculate judge total
-      int judgeTotal = 0;
-      for (final ballot in judgeBallots) {
-        final vote = ballot.judgeVotes[participant.id];
-        if (vote != null) {
-          judgeTotal += vote.singing + vote.performance + vote.audienceParticipation;
-        }
-      }
-
-      rankings.add(ParticipantResult(
+    final rankings = fetchedResults.map((result) {
+      final participant = participants.firstWhere(
+        (p) => p.displayName == result.name,
+        orElse: () => ParticipantModel(id: result.id, name: result.name, order: 0),
+      );
+      return ParticipantResult(
         id: participant.id,
-        name: participant.displayName,
-        audiencePoints: audiencePoints,
-        judgeTotal: judgeTotal,
-        combinedScore: audiencePoints + judgeTotal,
-      ));
-    }
+        name: result.name,
+        audiencePoints: result.audiencePoints,
+        judgeTotal: result.judgeTotal,
+        combinedScore: result.combinedScore,
+      );
+    }).toList();
 
-    // Sort by combined score (lower is better for audience rankings)
-    rankings.sort((a, b) => a.combinedScore.compareTo(b.combinedScore));
-
-    // Find participants with the lowest score (highest combined = worst)
+    // Determine eliminated/tied participants
     String? eliminatedId;
     List<String> tiedIds = [];
-
     if (rankings.isNotEmpty) {
       final lowestScore = rankings.last.combinedScore;
       final lowestScorers = rankings
@@ -470,10 +487,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
           .toList();
 
       if (lowestScorers.length > 1) {
-        // There's a tie - don't auto-eliminate, require judge decision
         tiedIds = lowestScorers;
       } else {
-        // Clear winner for elimination
         eliminatedId = lowestScorers.first;
       }
     }

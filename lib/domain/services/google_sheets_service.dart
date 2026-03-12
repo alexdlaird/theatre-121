@@ -7,4 +7,9 @@ abstract class GoogleSheetsService {
     required EventModel event,
     required List<BallotModel> ballots,
   });
+
+  /// Fetches voting results from an existing spreadsheet.
+  Future<List<ParticipantResult>> fetchResultsFromSpreadsheet({
+    required String spreadsheetUrl,
+  });
 }

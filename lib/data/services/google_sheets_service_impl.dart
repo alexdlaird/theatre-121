@@ -166,4 +166,54 @@ class GoogleSheetsServiceImpl implements GoogleSheetsService {
     }
     return result;
   }
+
+  @override
+  Future<List<ParticipantResult>> fetchResultsFromSpreadsheet({
+    required String spreadsheetUrl,
+  }) async {
+    final client = await _getAuthClient();
+
+    try {
+      final sheetsApi = sheets.SheetsApi(client);
+
+      // Extract spreadsheet ID from URL
+      final uri = Uri.parse(spreadsheetUrl);
+      final pathSegments = uri.pathSegments;
+      final dIndex = pathSegments.indexOf('d');
+      if (dIndex == -1 || dIndex + 1 >= pathSegments.length) {
+        throw StateError('Invalid spreadsheet URL');
+      }
+      final spreadsheetId = pathSegments[dIndex + 1];
+
+      // Read the Summary sheet
+      final response = await sheetsApi.spreadsheets.values.get(
+        spreadsheetId,
+        'Summary!A2:D100',
+      );
+
+      final values = response.values;
+      if (values == null || values.isEmpty) {
+        return [];
+      }
+
+      final results = <ParticipantResult>[];
+      for (var i = 0; i < values.length; i++) {
+        final row = values[i];
+        if (row.isEmpty || row[0].toString().isEmpty) continue;
+
+        results.add(ParticipantResult(
+          id: 'p${i + 1}',
+          name: row[0].toString(),
+          audiencePoints: row.length > 1 ? int.tryParse(row[1].toString()) ?? 0 : 0,
+          judgeTotal: row.length > 2 ? int.tryParse(row[2].toString()) ?? 0 : 0,
+          combinedScore: row.length > 3 ? int.tryParse(row[3].toString()) ?? 0 : 0,
+        ));
+      }
+
+      results.sort((a, b) => a.combinedScore.compareTo(b.combinedScore));
+      return results;
+    } finally {
+      client.close();
+    }
+  }
 }
