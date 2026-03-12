@@ -93,7 +93,7 @@ class _JudgeBallotViewState extends State<_JudgeBallotView> {
       listener: (context, state) {
         if (state is BallotError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
+            SnackBar(content: SelectableText(state.message)),
           );
         }
       },
@@ -184,9 +184,28 @@ class _JudgeBallotViewState extends State<_JudgeBallotView> {
     final canSubmit = _canSubmit(votes, participants.length);
     final isLastParticipant =
         _currentParticipantIndex == participants.length - 1;
+    final judgeName = state.ballot.judgeName;
 
     return AppScaffold(
       title: 'Judge Ballot for "${state.event.name}"',
+      actions: judgeName != null
+          ? [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: context.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  judgeName,
+                  style: context.textTheme.labelMedium?.copyWith(
+                    color: context.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ]
+          : null,
       body: Column(
         children: [
           _buildProgressIndicator(context, participants.length, votes),

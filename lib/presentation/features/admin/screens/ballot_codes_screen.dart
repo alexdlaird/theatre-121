@@ -58,7 +58,7 @@ class _BallotCodesScreenState extends State<BallotCodesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
+          SnackBar(content: SelectableText('Export failed: $e')),
         );
       }
     } finally {
@@ -260,7 +260,7 @@ class _BallotCodeCard extends StatelessWidget {
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: ballot.code));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Code copied to clipboard')),
+                    const SnackBar(content: SelectableText('Code copied to clipboard')),
                   );
                 },
               ),

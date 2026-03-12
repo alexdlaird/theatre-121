@@ -123,7 +123,7 @@ class _AudienceBallotViewState extends State<_AudienceBallotView> {
       listener: (context, state) {
         if (state is BallotError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
+            SnackBar(content: SelectableText(state.message)),
           );
         }
       },

@@ -30,7 +30,7 @@ class _BallotEntryScreenState extends State<BallotEntryScreen> {
     if (widget.errorMessage != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.errorMessage!)),
+          SnackBar(content: SelectableText(widget.errorMessage!)),
         );
       });
     }
@@ -57,7 +57,7 @@ class _BallotEntryScreenState extends State<BallotEntryScreen> {
 
       if (ballot == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not found—enter the code from your ballot slip')),
+          const SnackBar(content: SelectableText('Not found—enter the code from your ballot slip')),
         );
         setState(() => _isValidating = false);
         return;
@@ -67,7 +67,7 @@ class _BallotEntryScreenState extends State<BallotEntryScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: SelectableText('Error: $e')),
       );
       setState(() => _isValidating = false);
     }

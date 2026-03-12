@@ -11,6 +11,7 @@ import 'package:theatre_121/presentation/features/admin/screens/create_event_scr
 import 'package:theatre_121/presentation/features/admin/bloc/admin_bloc.dart';
 import 'package:theatre_121/data/repositories/event_repository_impl.dart';
 import 'package:theatre_121/data/repositories/ballot_repository_impl.dart';
+import 'package:theatre_121/data/services/google_sheets_service_impl.dart';
 
 class AppRouter {
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -51,6 +52,7 @@ class AppRouter {
             create: (context) => AdminBloc(
               eventRepository: EventRepositoryImpl(),
               ballotRepository: BallotRepositoryImpl(),
+              sheetsService: GoogleSheetsServiceImpl(),
             )..add(const StartWatching()),
             child: child,
           );

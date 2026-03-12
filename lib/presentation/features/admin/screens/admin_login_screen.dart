@@ -21,7 +21,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: SelectableText(message),
         backgroundColor: Theme.of(context).colorScheme.error,
       ),
     );

@@ -159,10 +159,11 @@ class GoogleSheetsServiceImpl implements GoogleSheetsService {
 
   String _columnLetter(int column) {
     String result = '';
-    while (column > 0) {
-      column--;
-      result = String.fromCharCode(65 + (column % 26)) + result;
-      column ~/= 26;
+    var col = column;
+    while (col > 0) {
+      col--;
+      result = String.fromCharCode(65 + (col % 26)) + result;
+      col ~/= 26;
     }
     return result;
   }

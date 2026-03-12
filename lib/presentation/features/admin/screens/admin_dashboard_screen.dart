@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 import 'package:theatre_121/presentation/features/admin/bloc/admin_bloc.dart';
 import 'package:theatre_121/config/app_routes.dart';
@@ -41,12 +42,12 @@ class AdminDashboardView extends StatelessWidget {
         listenWhen: (previous, current) {
           if (current is AdminError) return true;
 
+          // Show snackbar when spreadsheet is generated (transition to complete)
           if (previous is AdminLoaded &&
-              previous.isClosingVoting &&
               current is AdminLoaded &&
-              !current.isClosingVoting &&
-              current.currentEvent != null &&
-              !current.currentEvent!.isVotingOpen) {
+              previous.closingProgress != ClosingProgress.complete &&
+              current.closingProgress == ClosingProgress.complete &&
+              current.votingResults != null) {
             return true;
           }
           return false;
@@ -54,12 +55,19 @@ class AdminDashboardView extends StatelessWidget {
         listener: (context, state) {
           if (state is AdminError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
+              SnackBar(content: SelectableText(state.message)),
             );
-          } else if (state is AdminLoaded) {
+          } else if (state is AdminLoaded && state.votingResults != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Voting closed. Google Sheets export coming soon.'),
+              SnackBar(
+                content: const SelectableText('Spreadsheet generated successfully'),
+                duration: const Duration(seconds: 10),
+                action: SnackBarAction(
+                  label: 'Go',
+                  onPressed: () {
+                    launchUrl(Uri.parse(state.votingResults!.spreadsheetUrl));
+                  },
+                ),
               ),
             );
           }
@@ -73,6 +81,43 @@ class AdminDashboardView extends StatelessWidget {
             return _buildDashboard(context, state);
           }
 
+          if (state is AdminError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: context.colorScheme.error,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Something went wrong',
+                      style: context.textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    SelectableText(
+                      state.message,
+                      style: context.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        context.read<AdminBloc>().add(const StartWatching());
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
           return const Center(child: Text('Something went wrong'));
         },
       ),
@@ -82,60 +127,68 @@ class AdminDashboardView extends StatelessWidget {
   Widget _buildDashboard(BuildContext context, AdminLoaded state) {
     final event = state.currentEvent;
 
+    if (event == null) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildNoEventCard(context),
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (event == null) ...[
-            _buildNoEventCard(context),
-          ] else ...[
-            _buildCurrentEventCard(context, event, state),
+          _buildCurrentEventCard(context, event, state),
+          const SizedBox(height: 16),
+          if (state.votingResults != null) ...[
+            _buildVotingResultsCard(context, state.votingResults!),
             const SizedBox(height: 16),
-            _buildBallotStatsCard(context, state),
-            const SizedBox(height: 16),
-            _buildDonationWinnersCard(context, event),
-            const SizedBox(height: 16),
-            _buildActionsCard(context, state),
           ],
+          _buildBallotStatsCard(context, state),
+          const SizedBox(height: 16),
+          _buildDonationWinnersCard(context, event, isEditable: event.isVotingOpen),
+          const SizedBox(height: 16),
+          _buildActionsCard(context, state),
         ],
       ),
     );
   }
 
   Widget _buildNoEventCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Icon(
-              Icons.event_busy,
-              size: 64,
-              color: context.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No Active Event',
-              style: context.textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Create a new event to start accepting votes',
-              style: context.textTheme.bodyMedium?.copyWith(
-                color: context.colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _navigateToCreateEvent(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Create New Event'),
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.event_busy,
+          size: 64,
+          color: context.colorScheme.onSurfaceVariant,
         ),
-      ),
+        const SizedBox(height: 16),
+        Text(
+          'No Active Event',
+          style: context.textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Create a first event to start accepting votes',
+          style: context.textTheme.bodyMedium?.copyWith(
+            color: context.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          onPressed: () => _navigateToCreateEvent(context),
+          icon: const Icon(Icons.add),
+          label: const Text('Create New Event'),
+        ),
+      ],
     );
   }
 
@@ -275,6 +328,149 @@ class AdminDashboardView extends StatelessWidget {
     );
   }
 
+  Widget _buildVotingResultsCard(BuildContext context, VotingResults results) {
+    final eliminated = results.eliminatedParticipant;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Voting Results',
+                  style: context.textTheme.titleMedium,
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () {
+                    launchUrl(Uri.parse(results.spreadsheetUrl));
+                  },
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Open Sheet'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (eliminated != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_downward, color: Colors.red.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Eliminated',
+                            style: context.textTheme.labelSmall?.copyWith(
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                          Text(
+                            eliminated.name,
+                            style: context.textTheme.titleMedium?.copyWith(
+                              color: Colors.red.shade900,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${eliminated.combinedScore} pts',
+                      style: context.textTheme.titleMedium?.copyWith(
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            const Divider(),
+            const SizedBox(height: 8),
+            Text(
+              'Rankings',
+              style: context.textTheme.labelMedium?.copyWith(
+                color: context.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...results.rankings.asMap().entries.map((entry) {
+              final index = entry.key;
+              final result = entry.value;
+              final isEliminated = result.id == results.eliminatedParticipantId;
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      child: Text(
+                        '${index + 1}.',
+                        style: context.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isEliminated ? Colors.red.shade700 : null,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        result.name,
+                        style: context.textTheme.bodyMedium?.copyWith(
+                          color: isEliminated ? Colors.red.shade700 : null,
+                          decoration: isEliminated
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'A: ${result.audiencePoints}',
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: context.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'J: ${result.judgeTotal}',
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: context.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        '${result.combinedScore}',
+                        style: context.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isEliminated ? Colors.red.shade700 : null,
+                        ),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildActionsCard(BuildContext context, AdminLoaded state) {
     final event = state.currentEvent;
 
@@ -294,7 +490,7 @@ class AdminDashboardView extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: state.isClosingVoting
                     ? null
-                    : () => _confirmCloseVoting(context),
+                    : () => _confirmCloseVoting(context, event!),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.colorScheme.error,
                   foregroundColor: context.colorScheme.onError,
@@ -307,7 +503,7 @@ class AdminDashboardView extends StatelessWidget {
                       )
                     : const Icon(Icons.lock),
                 label: Text(state.isClosingVoting
-                    ? ''
+                    ? state.closingProgressText
                     : 'Close Voting'),
               ),
             const SizedBox(height: 12),
@@ -322,7 +518,11 @@ class AdminDashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildDonationWinnersCard(BuildContext context, EventModel event) {
+  Widget _buildDonationWinnersCard(
+    BuildContext context,
+    EventModel event, {
+    required bool isEditable,
+  }) {
     final participants = List<ParticipantModel>.from(event.participants)
       ..sort((a, b) => a.order.compareTo(b.order));
 
@@ -343,6 +543,7 @@ class AdminDashboardView extends StatelessWidget {
               icon: Icons.attach_money,
               participants: participants,
               selectedId: event.largestDonationWinnerId,
+              isEditable: isEditable,
               onChanged: (value) {
                 context.read<AdminBloc>().add(
                       UpdateDonationWinner(largestDonationWinnerId: value ?? ''),
@@ -356,6 +557,7 @@ class AdminDashboardView extends StatelessWidget {
               icon: Icons.favorite,
               participants: participants,
               selectedId: event.mostDonationsWinnerId,
+              isEditable: isEditable,
               onChanged: (value) {
                 context.read<AdminBloc>().add(
                       UpdateDonationWinner(mostDonationsWinnerId: value ?? ''),
@@ -374,6 +576,7 @@ class AdminDashboardView extends StatelessWidget {
     required IconData icon,
     required List<ParticipantModel> participants,
     required String? selectedId,
+    required bool isEditable,
     required ValueChanged<String?> onChanged,
   }) {
     return Row(
@@ -384,23 +587,19 @@ class AdminDashboardView extends StatelessWidget {
         const SizedBox(width: 16),
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: selectedId,
+            initialValue: selectedId,
             decoration: const InputDecoration(
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
             hint: const Text('Select participant'),
-            items: [
-              const DropdownMenuItem<String>(
-                value: '',
-                child: Text('None'),
-              ),
-              ...participants.map((p) => DropdownMenuItem<String>(
-                    value: p.id,
-                    child: Text(p.displayName),
-                  )),
-            ],
-            onChanged: onChanged,
+            items: participants
+                .map((p) => DropdownMenuItem<String>(
+                      value: p.id,
+                      child: Text(p.displayName),
+                    ))
+                .toList(),
+            onChanged: isEditable ? onChanged : null,
           ),
         ),
       ],
@@ -411,7 +610,29 @@ class AdminDashboardView extends StatelessWidget {
     context.go(AppRoutes.adminCreateEvent);
   }
 
-  void _confirmCloseVoting(BuildContext context) {
+  void _confirmCloseVoting(BuildContext context, EventModel event) {
+    // Validate bonus points are selected
+    final missingBonusPoints = <String>[];
+    if (event.largestDonationWinnerId == null ||
+        event.largestDonationWinnerId!.isEmpty) {
+      missingBonusPoints.add('Largest Donation');
+    }
+    if (event.mostDonationsWinnerId == null ||
+        event.mostDonationsWinnerId!.isEmpty) {
+      missingBonusPoints.add('Most Donations');
+    }
+
+    if (missingBonusPoints.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SelectableText(
+            'Select ${missingBonusPoints.join(" and ")} before closing voting.',
+          ),
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(

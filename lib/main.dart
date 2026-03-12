@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -22,6 +24,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Use Firestore emulator in debug mode (Auth uses real Firebase for OAuth)
+  if (kDebugMode) {
+    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+  }
 
   runApp(const ComeOutSinginApp());
 }

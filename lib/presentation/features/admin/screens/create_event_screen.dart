@@ -33,7 +33,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   late final TextEditingController _eventNameController;
   late final TextEditingController _audienceCountController;
   final List<TextEditingController> _judgeControllers = [];
+  final List<FocusNode> _judgeFocusNodes = [];
   final List<TextEditingController> _participantControllers = [];
+  final List<FocusNode> _participantFocusNodes = [];
 
   @override
   void initState() {
@@ -41,7 +43,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     // Pre-populate from previous event or use defaults
     _eventNameController = TextEditingController(
-      text: widget.previousEventName ?? "Theatre 121",
+      text: widget.previousEventName ?? 'Theatre 121',
     );
     _audienceCountController = TextEditingController(
       text: (widget.previousAudienceCount ?? 100).toString(),
@@ -51,11 +53,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (widget.previousJudges != null && widget.previousJudges!.isNotEmpty) {
       for (final name in widget.previousJudges!) {
         _judgeControllers.add(TextEditingController(text: name));
+        _judgeFocusNodes.add(FocusNode());
       }
     } else {
       // Start with 5 empty judge slots
       for (int i = 0; i < 5; i++) {
         _judgeControllers.add(TextEditingController());
+        _judgeFocusNodes.add(FocusNode());
       }
     }
 
@@ -67,11 +71,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         ..shuffle(Random());
       for (final name in shuffled) {
         _participantControllers.add(TextEditingController(text: name));
+        _participantFocusNodes.add(FocusNode());
       }
     } else {
       // Start with 10 empty participant slots
       for (int i = 0; i < 10; i++) {
         _participantControllers.add(TextEditingController());
+        _participantFocusNodes.add(FocusNode());
       }
     }
   }
@@ -83,8 +89,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     for (final controller in _judgeControllers) {
       controller.dispose();
     }
+    for (final node in _judgeFocusNodes) {
+      node.dispose();
+    }
     for (final controller in _participantControllers) {
       controller.dispose();
+    }
+    for (final node in _participantFocusNodes) {
+      node.dispose();
     }
     super.dispose();
   }
@@ -92,6 +104,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void _addJudgeField() {
     setState(() {
       _judgeControllers.add(TextEditingController());
+      _judgeFocusNodes.add(FocusNode());
     });
   }
 
@@ -100,6 +113,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       setState(() {
         _judgeControllers[index].dispose();
         _judgeControllers.removeAt(index);
+        _judgeFocusNodes[index].dispose();
+        _judgeFocusNodes.removeAt(index);
       });
     }
   }
@@ -107,6 +122,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void _addParticipantField() {
     setState(() {
       _participantControllers.add(TextEditingController());
+      _participantFocusNodes.add(FocusNode());
     });
   }
 
@@ -115,6 +131,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       setState(() {
         _participantControllers[index].dispose();
         _participantControllers.removeAt(index);
+        _participantFocusNodes[index].dispose();
+        _participantFocusNodes.removeAt(index);
       });
     }
   }
@@ -133,8 +151,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (emptyJudgeIndices.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Please fill in all judge names (missing: ${emptyJudgeIndices.join(", ")})',
+          content: SelectableText(
+            'Fill in all judge names (missing: ${emptyJudgeIndices.join(", ")})',
           ),
         ),
       );
@@ -152,8 +170,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (emptyParticipantIndices.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Please fill in all participant names (missing: ${emptyParticipantIndices.join(", ")})',
+          content: SelectableText(
+            'Fill in all participant names (missing: ${emptyParticipantIndices.join(", ")})',
           ),
         ),
       );
@@ -236,10 +254,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           Expanded(
             child: TextFormField(
               controller: _judgeControllers[index],
+              focusNode: _judgeFocusNodes[index],
               decoration: InputDecoration(
                 hintText: 'Judge ${index + 1} name',
                 isDense: true,
               ),
+              onFieldSubmitted: (_) {
+                if (index < _judgeFocusNodes.length - 1) {
+                  _judgeFocusNodes[index + 1].requestFocus();
+                } else if (_participantFocusNodes.isNotEmpty) {
+                  _participantFocusNodes.first.requestFocus();
+                }
+              },
             ),
           ),
           IconButton(
@@ -247,6 +273,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             icon: const Icon(Icons.delete_outline),
             color: context.colorScheme.error,
             tooltip: 'Remove judge',
+            focusNode: FocusNode(skipTraversal: true),
           ),
         ],
       ),
@@ -308,10 +335,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           Expanded(
             child: TextFormField(
               controller: _participantControllers[index],
+              focusNode: _participantFocusNodes[index],
               decoration: InputDecoration(
                 hintText: 'Participant ${index + 1} name',
                 isDense: true,
               ),
+              onFieldSubmitted: (_) {
+                if (index < _participantFocusNodes.length - 1) {
+                  _participantFocusNodes[index + 1].requestFocus();
+                }
+              },
             ),
           ),
           IconButton(
@@ -319,6 +352,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             icon: const Icon(Icons.delete_outline),
             color: context.colorScheme.error,
             tooltip: 'Remove participant',
+            focusNode: FocusNode(skipTraversal: true),
           ),
         ],
       ),
@@ -386,6 +420,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   }
                   return null;
                 },
+                onFieldSubmitted: (_) {
+                  if (_judgeFocusNodes.isNotEmpty) {
+                    _judgeFocusNodes.first.requestFocus();
+                  }
+                },
               ),
               const SizedBox(height: 32),
               Row(
@@ -400,6 +439,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     icon: const Icon(Icons.add_circle),
                     color: context.colorScheme.primary,
                     tooltip: 'Add judge',
+                    focusNode: FocusNode(skipTraversal: true),
                   ),
                 ],
               ),
@@ -417,7 +457,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     onPressed: _addParticipantField,
                     icon: const Icon(Icons.add_circle),
                     color: context.colorScheme.primary,
-                    tooltip: 'Add participant'
+                    tooltip: 'Add participant',
+                    focusNode: FocusNode(skipTraversal: true),
                   ),
                 ],
               ),

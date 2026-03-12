@@ -6,6 +6,7 @@ import 'package:equatable/equatable.dart';
 import 'package:theatre_121/data/models/models.dart';
 import 'package:theatre_121/domain/repositories/event_repository.dart';
 import 'package:theatre_121/domain/repositories/ballot_repository.dart';
+import 'package:theatre_121/domain/services/google_sheets_service.dart';
 
 abstract class AdminEvent extends Equatable {
   const AdminEvent();
@@ -34,6 +35,15 @@ class _BallotsUpdated extends AdminEvent {
 
   @override
   List<Object?> get props => [ballots];
+}
+
+class _StreamError extends AdminEvent {
+  final String message;
+
+  const _StreamError(this.message);
+
+  @override
+  List<Object?> get props => [message];
 }
 
 class CreateEvent extends AdminEvent {
@@ -71,6 +81,14 @@ class UpdateDonationWinner extends AdminEvent {
   List<Object?> get props => [largestDonationWinnerId, mostDonationsWinnerId];
 }
 
+enum ClosingProgress {
+  none,
+  closingVoting,
+  exportingBallots,
+  calculatingResults,
+  complete,
+}
+
 abstract class AdminState extends Equatable {
   const AdminState();
 
@@ -90,14 +108,19 @@ class AdminLoaded extends AdminState {
   final EventModel? currentEvent;
   final List<BallotModel> ballots;
   final bool isCreatingEvent;
-  final bool isClosingVoting;
+  final ClosingProgress closingProgress;
+  final VotingResults? votingResults;
 
   const AdminLoaded({
     this.currentEvent,
     this.ballots = const [],
     this.isCreatingEvent = false,
-    this.isClosingVoting = false,
+    this.closingProgress = ClosingProgress.none,
+    this.votingResults,
   });
+
+  bool get isClosingVoting => closingProgress != ClosingProgress.none &&
+      closingProgress != ClosingProgress.complete;
 
   int get audienceBallotCount => ballots.where((b) => b.isAudience).length;
   int get judgeBallotCount => ballots.where((b) => b.isJudge).length;
@@ -106,22 +129,39 @@ class AdminLoaded extends AdminState {
   int get submittedJudgeCount =>
       ballots.where((b) => b.isJudge && b.submitted).length;
 
+  String get closingProgressText {
+    switch (closingProgress) {
+      case ClosingProgress.closingVoting:
+        return 'Closing voting ...';
+      case ClosingProgress.exportingBallots:
+        return 'Exporting ballots ...';
+      case ClosingProgress.calculatingResults:
+        return 'Calculating results ...';
+      case ClosingProgress.none:
+      case ClosingProgress.complete:
+        return '';
+    }
+  }
+
   @override
   List<Object?> get props =>
-      [currentEvent, ballots, isCreatingEvent, isClosingVoting];
+      [currentEvent, ballots, isCreatingEvent, closingProgress, votingResults];
 
   AdminLoaded copyWith({
     EventModel? currentEvent,
     List<BallotModel>? ballots,
     bool? isCreatingEvent,
-    bool? isClosingVoting,
+    ClosingProgress? closingProgress,
+    VotingResults? votingResults,
     bool clearEvent = false,
+    bool clearResults = false,
   }) {
     return AdminLoaded(
       currentEvent: clearEvent ? null : (currentEvent ?? this.currentEvent),
       ballots: ballots ?? this.ballots,
       isCreatingEvent: isCreatingEvent ?? this.isCreatingEvent,
-      isClosingVoting: isClosingVoting ?? this.isClosingVoting,
+      closingProgress: closingProgress ?? this.closingProgress,
+      votingResults: clearResults ? null : (votingResults ?? this.votingResults),
     );
   }
 }
@@ -138,6 +178,7 @@ class AdminError extends AdminState {
 class AdminBloc extends Bloc<AdminEvent, AdminState> {
   final EventRepository _eventRepository;
   final BallotRepository _ballotRepository;
+  final GoogleSheetsService _sheetsService;
 
   StreamSubscription<EventModel?>? _eventSubscription;
   StreamSubscription<List<BallotModel>>? _ballotsSubscription;
@@ -146,12 +187,15 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   AdminBloc({
     required EventRepository eventRepository,
     required BallotRepository ballotRepository,
+    required GoogleSheetsService sheetsService,
   })  : _eventRepository = eventRepository,
         _ballotRepository = ballotRepository,
+        _sheetsService = sheetsService,
         super(const AdminInitial()) {
     on<StartWatching>(_onStartWatching);
     on<_EventUpdated>(_onEventUpdated);
     on<_BallotsUpdated>(_onBallotsUpdated);
+    on<_StreamError>(_onStreamError);
     on<CreateEvent>(_onCreateEvent);
     on<CloseVoting>(_onCloseVoting);
     on<UpdateDonationWinner>(_onUpdateDonationWinner);
@@ -166,8 +210,15 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     _eventSubscription?.cancel();
     _eventSubscription = _eventRepository.watchCurrentEvent().listen(
       (event) => add(_EventUpdated(event)),
-      onError: (e) => emit(AdminError(e.toString())),
+      onError: (e) => add(_StreamError(e.toString())),
     );
+  }
+
+  void _onStreamError(
+    _StreamError event,
+    Emitter<AdminState> emit,
+  ) {
+    emit(AdminError(event.message));
   }
 
   void _onEventUpdated(
@@ -186,7 +237,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         _ballotsSubscription =
             _ballotRepository.watchEventBallots(newEvent.id).listen(
                   (ballots) => add(_BallotsUpdated(ballots)),
-                  onError: (e) => emit(AdminError(e.toString())),
+                  onError: (e) => add(_StreamError(e.toString())),
                 );
       }
     }
@@ -261,20 +312,102 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     CloseVoting event,
     Emitter<AdminState> emit,
   ) async {
-    final currentState = state;
+    var currentState = state;
     if (currentState is! AdminLoaded || currentState.currentEvent == null) {
       return;
     }
 
-    emit(currentState.copyWith(isClosingVoting: true));
+    final eventData = currentState.currentEvent!;
+    final ballotData = currentState.ballots;
 
     try {
-      await _eventRepository.closeVoting(currentState.currentEvent!.id);
-      await _exportResultsToSheets(currentState.currentEvent!, currentState.ballots);
-      // Stream will automatically update the state
+      // Step 1: Closing voting
+      currentState = currentState.copyWith(closingProgress: ClosingProgress.closingVoting);
+      emit(currentState);
+      await _eventRepository.closeVoting(eventData.id);
+
+      // Step 2: Exporting ballots
+      currentState = currentState.copyWith(closingProgress: ClosingProgress.exportingBallots);
+      emit(currentState);
+      final spreadsheetUrl = await _sheetsService.createResultsSpreadsheet(
+        event: eventData,
+        ballots: ballotData,
+      );
+
+      // Step 3: Calculating results
+      currentState = currentState.copyWith(closingProgress: ClosingProgress.calculatingResults);
+      emit(currentState);
+      final results = _calculateResults(
+        event: eventData,
+        ballots: ballotData,
+        spreadsheetUrl: spreadsheetUrl,
+      );
+
+      // Step 4: Complete
+      emit(currentState.copyWith(
+        closingProgress: ClosingProgress.complete,
+        votingResults: results,
+        currentEvent: eventData.copyWith(status: EventStatus.closed),
+      ));
     } catch (e) {
+      // Reset progress and show error via snackbar (listener handles AdminError)
+      if (state is AdminLoaded) {
+        emit((state as AdminLoaded).copyWith(closingProgress: ClosingProgress.none));
+      }
       emit(AdminError(e.toString()));
     }
+  }
+
+  VotingResults _calculateResults({
+    required EventModel event,
+    required List<BallotModel> ballots,
+    required String spreadsheetUrl,
+  }) {
+    final participants = event.participants;
+    final audienceBallots = ballots.where((b) => b.isAudience && b.submitted).toList();
+    final judgeBallots = ballots.where((b) => b.isJudge && b.submitted).toList();
+
+    final rankings = <ParticipantResult>[];
+
+    for (final participant in participants) {
+      // Calculate audience points (sum of rankings where lower is better)
+      int audiencePoints = 0;
+      for (final ballot in audienceBallots) {
+        final vote = ballot.audienceVotes[participant.id];
+        if (vote != null) {
+          audiencePoints += vote;
+        }
+      }
+
+      // Calculate judge total
+      int judgeTotal = 0;
+      for (final ballot in judgeBallots) {
+        final vote = ballot.judgeVotes[participant.id];
+        if (vote != null) {
+          judgeTotal += vote.singing + vote.performance + vote.audienceParticipation;
+        }
+      }
+
+      rankings.add(ParticipantResult(
+        id: participant.id,
+        name: participant.displayName,
+        audiencePoints: audiencePoints,
+        judgeTotal: judgeTotal,
+        combinedScore: audiencePoints + judgeTotal,
+      ));
+    }
+
+    // Sort by combined score (lower is better for audience rankings)
+    rankings.sort((a, b) => a.combinedScore.compareTo(b.combinedScore));
+
+    // Find eliminated participant (lowest ranked = highest combined score)
+    final eliminatedId = rankings.isNotEmpty ? rankings.last.id : null;
+
+    return VotingResults(
+      rankings: rankings,
+      eliminatedParticipantId: eliminatedId,
+      spreadsheetUrl: spreadsheetUrl,
+    );
   }
 
   Future<void> _onUpdateDonationWinner(
@@ -296,18 +429,6 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     } catch (e) {
       emit(AdminError(e.toString()));
     }
-  }
-
-  /// Exports voting results to Google Sheets.
-  Future<void> _exportResultsToSheets(
-    EventModel event,
-    List<BallotModel> ballots,
-  ) async {
-    // TODO: Implement Google Sheets export using googleapis package.
-    // Create a new spreadsheet with event results, including:
-    // - Participant rankings from audience votes
-    // - Judge scores (singing, performance, audience participation)
-    // - Calculated totals and final standings
   }
 
   @override
