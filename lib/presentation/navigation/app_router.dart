@@ -1,0 +1,105 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:theatre_121/config/app_routes.dart';
+import 'package:theatre_121/presentation/features/vote/screens/ballot_entry_screen.dart';
+import 'package:theatre_121/presentation/features/vote/screens/ballot_validator_screen.dart';
+import 'package:theatre_121/presentation/features/admin/screens/admin_login_screen.dart';
+import 'package:theatre_121/presentation/features/admin/screens/admin_dashboard_screen.dart';
+import 'package:theatre_121/presentation/features/admin/screens/ballot_codes_screen.dart';
+import 'package:theatre_121/presentation/features/admin/screens/create_event_screen.dart';
+import 'package:theatre_121/presentation/features/admin/bloc/admin_bloc.dart';
+import 'package:theatre_121/data/repositories/event_repository_impl.dart';
+import 'package:theatre_121/data/repositories/ballot_repository_impl.dart';
+
+class AppRouter {
+  static final _rootNavigatorKey = GlobalKey<NavigatorState>();
+
+  static GoRouter get router => _router;
+
+  static final GoRouter _router = GoRouter(
+    navigatorKey: _rootNavigatorKey,
+    initialLocation: AppRoutes.home,
+    routes: [
+      GoRoute(
+        path: AppRoutes.home,
+        builder: (context, state) {
+          final error = state.uri.queryParameters['error'];
+          return BallotEntryScreen(errorMessage: error);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.vote,
+        builder: (context, state) {
+          final ballotCode = state.uri.queryParameters['ballot'];
+          if (ballotCode != null && ballotCode.isNotEmpty) {
+            return BallotValidatorScreen(
+              ballotCode: ballotCode.toUpperCase(),
+            );
+          }
+          return const BallotEntryScreen();
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.adminLogin,
+        builder: (context, state) => const AdminLoginScreen(),
+      ),
+      // Admin shell route with shared bloc
+      ShellRoute(
+        builder: (context, state, child) {
+          return BlocProvider(
+            create: (context) => AdminBloc(
+              eventRepository: EventRepositoryImpl(),
+              ballotRepository: BallotRepositoryImpl(),
+            )..add(const StartWatching()),
+            child: child,
+          );
+        },
+        routes: [
+          GoRoute(
+            path: AppRoutes.admin,
+            builder: (context, state) => const AdminDashboardView(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminBallots,
+            builder: (context, state) => const BallotCodesScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminCreateEvent,
+            builder: (context, state) {
+              final adminState = context.read<AdminBloc>().state;
+              String? previousEventName;
+              List<String>? previousParticipants;
+              int? previousAudienceCount;
+              int? previousJudgeCount;
+              bool hasExistingEvent = false;
+
+              if (adminState is AdminLoaded && adminState.currentEvent != null) {
+                hasExistingEvent = true;
+                previousEventName = adminState.currentEvent!.name;
+                previousParticipants = adminState.currentEvent!.participants
+                    .map((p) => p.name)
+                    .toList();
+                previousAudienceCount = adminState.audienceBallotCount;
+                previousJudgeCount = adminState.judgeBallotCount;
+              }
+
+              return CreateEventScreen(
+                hasExistingEvent: hasExistingEvent,
+                previousEventName: previousEventName,
+                previousParticipants: previousParticipants,
+                previousAudienceCount: previousAudienceCount,
+                previousJudgeCount: previousJudgeCount,
+              );
+            },
+          ),
+        ],
+      ),
+    ],
+    errorBuilder: (context, state) => Scaffold(
+      body: Center(
+        child: Text('Page not found: ${state.uri}'),
+      ),
+    ),
+  );
+}
