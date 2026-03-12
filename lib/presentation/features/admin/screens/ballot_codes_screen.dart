@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:theatre_121/config/app_routes.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 import 'package:theatre_121/presentation/features/admin/bloc/admin_bloc.dart';
 import 'package:theatre_121/data/models/models.dart';
+import 'package:theatre_121/data/services/pdf_export_service_impl.dart';
 
 String _buildBallotUrl(String code) {
   if (!kIsWeb) {
@@ -17,16 +19,54 @@ String _buildBallotUrl(String code) {
   return '${base.scheme}://${base.host}${base.hasPort ? ':${base.port}' : ''}/vote?ballot=$code';
 }
 
-String _getBaseHost() {
+String _getBaseVoteUrl() {
   if (!kIsWeb) {
     throw UnsupportedError('This app only supports web');
   }
   final base = Uri.base;
-  return '${base.host}${base.hasPort ? ':${base.port}' : ''}/vote';
+  return '${base.scheme}://${base.host}${base.hasPort ? ':${base.port}' : ''}/vote';
 }
 
-class BallotCodesScreen extends StatelessWidget {
+class BallotCodesScreen extends StatefulWidget {
   const BallotCodesScreen({super.key});
+
+  @override
+  State<BallotCodesScreen> createState() => _BallotCodesScreenState();
+}
+
+class _BallotCodesScreenState extends State<BallotCodesScreen> {
+  bool _isExporting = false;
+
+  Future<void> _exportToPdf(
+    List<BallotModel> audienceBallots,
+    List<BallotModel> judgeBallots,
+  ) async {
+    setState(() => _isExporting = true);
+
+    try {
+      final pdfService = PdfExportServiceImpl();
+      final pdfBytes = await pdfService.generateBallotCodesPdf(
+        audienceBallots: audienceBallots,
+        judgeBallots: judgeBallots,
+        baseUrl: _getBaseVoteUrl(),
+      );
+
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: 'ballot-codes.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,15 +104,23 @@ class BallotCodesScreen extends StatelessWidget {
                 ],
               ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.print),
-                  onPressed: () => _showPrintPreview(
-                    context,
-                    audienceBallots,
-                    judgeBallots,
-                  ),
-                  tooltip: 'Print Preview',
-                ),
+                _isExporting
+                    ? const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.download),
+                        onPressed: () => _exportToPdf(
+                          audienceBallots,
+                          judgeBallots,
+                        ),
+                        tooltip: 'Export Ballots as PDF',
+                      ),
               ],
             ),
             body: TabBarView(
@@ -111,21 +159,6 @@ class BallotCodesScreen extends StatelessWidget {
           isJudge: isJudge,
         );
       },
-    );
-  }
-
-  void _showPrintPreview(
-    BuildContext context,
-    List<BallotModel> audienceBallots,
-    List<BallotModel> judgeBallots,
-  ) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _PrintPreviewScreen(
-          audienceBallots: audienceBallots,
-          judgeBallots: judgeBallots,
-        ),
-      ),
     );
   }
 }
@@ -238,125 +271,3 @@ class _BallotCodeCard extends StatelessWidget {
   }
 }
 
-class _PrintPreviewScreen extends StatelessWidget {
-  final List<BallotModel> audienceBallots;
-  final List<BallotModel> judgeBallots;
-
-  const _PrintPreviewScreen({
-    required this.audienceBallots,
-    required this.judgeBallots,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: null,
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: const Text('Print Preview'),
-        actions: [
-          TextButton.icon(
-            onPressed: () => _exportToGoogleDocs(context),
-            icon: const Icon(Icons.file_upload),
-            label: const Text('Export to Google Docs'),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Audience Ballots (${audienceBallots.length})',
-              style: context.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _buildPrintableGrid(audienceBallots, isJudge: false),
-            const SizedBox(height: 32),
-            Text(
-              'Judge Ballots (${judgeBallots.length})',
-              style: context.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _buildPrintableGrid(judgeBallots, isJudge: true),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrintableGrid(
-    List<BallotModel> ballots, {
-    required bool isJudge,
-  }) {
-    final baseHost = _getBaseHost();
-
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      children: ballots.map((ballot) {
-        final url = _buildBallotUrl(ballot.code);
-
-        return Container(
-          width: 200,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            children: [
-              QrImageView(
-                data: url,
-                size: 120,
-                backgroundColor: Colors.white,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                ballot.code,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontFamily: 'monospace',
-                  letterSpacing: 4,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              if (ballot.judgeName != null)
-                Text(
-                  ballot.judgeName!,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Text(
-                baseHost,
-                style: const TextStyle(fontSize: 10),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  /// Exports ballot codes to a Google Doc for printing.
-  void _exportToGoogleDocs(BuildContext context) {
-    // TODO: Implement Google Docs export using googleapis package.
-    // Create a new document with printable ballot cards containing:
-    // - QR codes for each ballot
-    // - Ballot codes in large text
-    // - Judge/Audience labels
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Google Docs export coming soon')),
-    );
-  }
-}

@@ -4,7 +4,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.1
+  sdk: ^3.11.0
+  flutter: ^3.41.0
 
 dependencies:
   flutter:
@@ -25,7 +26,7 @@ dependencies:
   # State Management
   flutter_bloc: ^9.1.0
   bloc: ^9.0.0
-  equatable: ^2.0.7
+  equatable: ^2.0.0
 
   # Routing
   go_router: ^15.1.0
@@ -33,20 +34,21 @@ dependencies:
   # QR Code generation
   qr_flutter: ^4.1.0
 
+  # PDF generation
+  pdf: ^3.11.0
+  printing: ^5.13.0
+
   # Utilities
   uuid: ^4.5.0
-  intl: ^0.20.2
+  http: ^1.2.0
+  intl: ^0.20.0
   collection: ^1.19.0
 
   # UI
   url_launcher: ^6.3.0
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
   flutter_lints: ^6.0.0
-  mocktail: ^1.0.4
-  bloc_test: ^10.0.0
   flutter_launcher_icons: ^0.14.0
 
 flutter_launcher_icons:
