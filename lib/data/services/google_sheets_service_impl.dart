@@ -1,24 +1,14 @@
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:googleapis_auth/googleapis_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:theatre_121/config/google_sign_in_config.dart';
 import 'package:theatre_121/data/models/models.dart';
 import 'package:theatre_121/domain/services/google_sheets_service.dart';
 
 class GoogleSheetsServiceImpl implements GoogleSheetsService {
-  final GoogleSignIn _googleSignIn;
-
-  GoogleSheetsServiceImpl({GoogleSignIn? googleSignIn})
-      : _googleSignIn = googleSignIn ??
-            GoogleSignIn(
-              scopes: [
-                'email',
-                'https://www.googleapis.com/auth/drive.file',
-              ],
-            );
 
   Future<AuthClient> _getAuthClient() async {
-    final account = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    final account = googleSignIn.currentUser ?? await googleSignIn.signInSilently();
     if (account == null) {
       throw StateError('Not signed in to Google');
     }
@@ -48,10 +38,13 @@ class GoogleSheetsServiceImpl implements GoogleSheetsService {
       final sheetsApi = sheets.SheetsApi(client);
 
       // Create the spreadsheet
+      final now = DateTime.now();
+      final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
       final spreadsheet = await sheetsApi.spreadsheets.create(
         sheets.Spreadsheet(
           properties: sheets.SpreadsheetProperties(
-            title: '${event.name} - Voting Results',
+            title: '${event.name} - Voting Results - $dateStr',
           ),
           sheets: [
             sheets.Sheet(
@@ -120,12 +113,15 @@ class GoogleSheetsServiceImpl implements GoogleSheetsService {
       // Build summary sheet
       final summaryRows = <List<Object?>>[];
       summaryRows.add(['Participant', 'Audience Points', 'Judge Total', 'Combined']);
-      for (final participant in participants) {
+      for (var i = 0; i < participants.length; i++) {
+        final participant = participants[i];
+        final col = _columnLetter(i + 2); // B, C, D, etc.
+        final row = i + 2; // 2, 3, 4, etc.
         summaryRows.add([
           participant.displayName,
-          '=SUMIF(\'Audience Votes\'!A:A,"<>",\'Audience Votes\'!${_columnLetter(participants.indexOf(participant) + 2)}:\${_columnLetter(participants.indexOf(participant) + 2)})',
-          '=SUMIF(\'Judge Votes\'!C:C,"${participant.displayName}",\'Judge Votes\'!G:G)',
-          '=B${participants.indexOf(participant) + 2}+C${participants.indexOf(participant) + 2}',
+          "=SUM('Audience Votes'!${col}2:$col)",
+          "=SUMIF('Judge Votes'!C:C,\"${participant.displayName}\",'Judge Votes'!G:G)",
+          '=B$row+C$row',
         ]);
       }
 

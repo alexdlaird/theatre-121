@@ -61,6 +61,13 @@ class EventRepositoryImpl implements EventRepository {
   }
 
   @override
+  Future<void> updateSpreadsheetUrl(String eventId, String spreadsheetUrl) async {
+    await _eventsCollection.doc(eventId).update({
+      'spreadsheetUrl': spreadsheetUrl,
+    });
+  }
+
+  @override
   Future<void> deleteEvent(String eventId) async {
     await _eventsCollection.doc(eventId).delete();
   }

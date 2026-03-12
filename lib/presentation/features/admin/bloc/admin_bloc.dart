@@ -68,6 +68,10 @@ class CloseVoting extends AdminEvent {
   const CloseVoting();
 }
 
+class RerunExport extends AdminEvent {
+  const RerunExport();
+}
+
 class UpdateDonationWinner extends AdminEvent {
   final String? largestDonationWinnerId;
   final String? mostDonationsWinnerId;
@@ -198,6 +202,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     on<_StreamError>(_onStreamError);
     on<CreateEvent>(_onCreateEvent);
     on<CloseVoting>(_onCloseVoting);
+    on<RerunExport>(_onRerunExport);
     on<UpdateDonationWinner>(_onUpdateDonationWinner);
   }
 
@@ -261,7 +266,25 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       // Only emit if ballots actually changed
       if (!const DeepCollectionEquality()
           .equals(currentState.ballots, event.ballots)) {
-        emit(currentState.copyWith(ballots: event.ballots));
+        final eventData = currentState.currentEvent;
+        // Recalculate results if event is closed and has spreadsheet URL
+        if (eventData != null &&
+            !eventData.isVotingOpen &&
+            eventData.spreadsheetUrl != null &&
+            currentState.votingResults == null) {
+          final results = _calculateResults(
+            event: eventData,
+            ballots: event.ballots,
+            spreadsheetUrl: eventData.spreadsheetUrl!,
+          );
+          emit(currentState.copyWith(
+            ballots: event.ballots,
+            votingResults: results,
+            closingProgress: ClosingProgress.complete,
+          ));
+        } else {
+          emit(currentState.copyWith(ballots: event.ballots));
+        }
       }
     }
   }
@@ -326,6 +349,10 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       emit(currentState);
       await _eventRepository.closeVoting(eventData.id);
 
+      // Update event status to closed immediately
+      final closedEvent = eventData.copyWith(status: EventStatus.closed);
+      currentState = currentState.copyWith(currentEvent: closedEvent);
+
       // Step 2: Exporting ballots
       currentState = currentState.copyWith(closingProgress: ClosingProgress.exportingBallots);
       emit(currentState);
@@ -333,6 +360,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         event: eventData,
         ballots: ballotData,
       );
+      await _eventRepository.updateSpreadsheetUrl(eventData.id, spreadsheetUrl);
 
       // Step 3: Calculating results
       currentState = currentState.copyWith(closingProgress: ClosingProgress.calculatingResults);
@@ -356,6 +384,36 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       }
       emit(AdminError(e.toString()));
     }
+  }
+
+  void _onRerunExport(
+    RerunExport event,
+    Emitter<AdminState> emit,
+  ) {
+    final currentState = state;
+    if (currentState is! AdminLoaded || currentState.currentEvent == null) {
+      return;
+    }
+
+    final eventData = currentState.currentEvent!;
+    final ballotData = currentState.ballots;
+    final spreadsheetUrl = eventData.spreadsheetUrl;
+
+    if (spreadsheetUrl == null) {
+      emit(const AdminError('No spreadsheet URL found. Close voting first.'));
+      return;
+    }
+
+    final results = _calculateResults(
+      event: eventData,
+      ballots: ballotData,
+      spreadsheetUrl: spreadsheetUrl,
+    );
+
+    emit(currentState.copyWith(
+      votingResults: results,
+      closingProgress: ClosingProgress.complete,
+    ));
   }
 
   VotingResults _calculateResults({
@@ -400,12 +458,30 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     // Sort by combined score (lower is better for audience rankings)
     rankings.sort((a, b) => a.combinedScore.compareTo(b.combinedScore));
 
-    // Find eliminated participant (lowest ranked = highest combined score)
-    final eliminatedId = rankings.isNotEmpty ? rankings.last.id : null;
+    // Find participants with the lowest score (highest combined = worst)
+    String? eliminatedId;
+    List<String> tiedIds = [];
+
+    if (rankings.isNotEmpty) {
+      final lowestScore = rankings.last.combinedScore;
+      final lowestScorers = rankings
+          .where((r) => r.combinedScore == lowestScore)
+          .map((r) => r.id)
+          .toList();
+
+      if (lowestScorers.length > 1) {
+        // There's a tie - don't auto-eliminate, require judge decision
+        tiedIds = lowestScorers;
+      } else {
+        // Clear winner for elimination
+        eliminatedId = lowestScorers.first;
+      }
+    }
 
     return VotingResults(
       rankings: rankings,
       eliminatedParticipantId: eliminatedId,
+      tiedParticipantIds: tiedIds,
       spreadsheetUrl: spreadsheetUrl,
     );
   }

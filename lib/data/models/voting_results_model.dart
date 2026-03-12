@@ -22,19 +22,27 @@ class ParticipantResult extends Equatable {
 class VotingResults extends Equatable {
   final List<ParticipantResult> rankings;
   final String? eliminatedParticipantId;
+  final List<String> tiedParticipantIds;
   final String spreadsheetUrl;
 
   const VotingResults({
     required this.rankings,
     this.eliminatedParticipantId,
+    this.tiedParticipantIds = const [],
     required this.spreadsheetUrl,
   });
+
+  bool get hasTie => tiedParticipantIds.isNotEmpty;
 
   ParticipantResult? get eliminatedParticipant {
     if (eliminatedParticipantId == null) return null;
     return rankings.where((r) => r.id == eliminatedParticipantId).firstOrNull;
   }
 
+  List<ParticipantResult> get tiedParticipants {
+    return rankings.where((r) => tiedParticipantIds.contains(r.id)).toList();
+  }
+
   @override
-  List<Object?> get props => [rankings, eliminatedParticipantId, spreadsheetUrl];
+  List<Object?> get props => [rankings, eliminatedParticipantId, tiedParticipantIds, spreadsheetUrl];
 }

@@ -13,6 +13,7 @@ class EventModel extends Equatable {
   final DateTime createdAt;
   final String? largestDonationWinnerId;
   final String? mostDonationsWinnerId;
+  final String? spreadsheetUrl;
 
   const EventModel({
     required this.id,
@@ -23,6 +24,7 @@ class EventModel extends Equatable {
     required this.createdAt,
     this.largestDonationWinnerId,
     this.mostDonationsWinnerId,
+    this.spreadsheetUrl,
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json, String id) {
@@ -39,6 +41,7 @@ class EventModel extends Equatable {
       createdAt: (json['createdAt'] as Timestamp).toDate(),
       largestDonationWinnerId: json['largestDonationWinnerId'] as String?,
       mostDonationsWinnerId: json['mostDonationsWinnerId'] as String?,
+      spreadsheetUrl: json['spreadsheetUrl'] as String?,
     );
   }
 
@@ -51,6 +54,7 @@ class EventModel extends Equatable {
       'createdAt': Timestamp.fromDate(createdAt),
       'largestDonationWinnerId': largestDonationWinnerId,
       'mostDonationsWinnerId': mostDonationsWinnerId,
+      'spreadsheetUrl': spreadsheetUrl,
     };
   }
 
@@ -67,6 +71,7 @@ class EventModel extends Equatable {
     DateTime? createdAt,
     String? largestDonationWinnerId,
     String? mostDonationsWinnerId,
+    String? spreadsheetUrl,
     bool clearLargestDonationWinner = false,
     bool clearMostDonationsWinner = false,
   }) {
@@ -83,6 +88,7 @@ class EventModel extends Equatable {
       mostDonationsWinnerId: clearMostDonationsWinner
           ? null
           : (mostDonationsWinnerId ?? this.mostDonationsWinnerId),
+      spreadsheetUrl: spreadsheetUrl ?? this.spreadsheetUrl,
     );
   }
 
@@ -96,5 +102,6 @@ class EventModel extends Equatable {
         createdAt,
         largestDonationWinnerId,
         mostDonationsWinnerId,
+        spreadsheetUrl,
       ];
 }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:go_router/go_router.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 import 'package:theatre_121/data/repositories/admin_repository.dart';
 import 'package:theatre_121/config/app_routes.dart';
+import 'package:theatre_121/config/google_sign_in_config.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -31,13 +31,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final googleSignIn = GoogleSignIn(
-        scopes: [
-          'email',
-          'https://www.googleapis.com/auth/drive.file',
-        ],
-      );
-
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         setState(() => _isLoading = false);

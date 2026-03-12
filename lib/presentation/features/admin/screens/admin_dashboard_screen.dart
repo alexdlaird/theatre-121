@@ -42,10 +42,10 @@ class AdminDashboardView extends StatelessWidget {
         listenWhen: (previous, current) {
           if (current is AdminError) return true;
 
-          // Show snackbar when spreadsheet is generated (transition to complete)
+          // Show snackbar when spreadsheet is generated (only after actual export)
           if (previous is AdminLoaded &&
               current is AdminLoaded &&
-              previous.closingProgress != ClosingProgress.complete &&
+              previous.isClosingVoting &&
               current.closingProgress == ClosingProgress.complete &&
               current.votingResults != null) {
             return true;
@@ -63,7 +63,7 @@ class AdminDashboardView extends StatelessWidget {
                 content: const SelectableText('Spreadsheet generated successfully'),
                 duration: const Duration(seconds: 10),
                 action: SnackBarAction(
-                  label: 'Go',
+                  label: 'Open Sheet',
                   onPressed: () {
                     launchUrl(Uri.parse(state.votingResults!.spreadsheetUrl));
                   },
@@ -110,7 +110,7 @@ class AdminDashboardView extends StatelessWidget {
                         context.read<AdminBloc>().add(const StartWatching());
                       },
                       icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
+                      label: const Text('Reload'),
                     ),
                   ],
                 ),
@@ -330,6 +330,7 @@ class AdminDashboardView extends StatelessWidget {
 
   Widget _buildVotingResultsCard(BuildContext context, VotingResults results) {
     final eliminated = results.eliminatedParticipant;
+    final tiedParticipants = results.tiedParticipants;
 
     return Card(
       child: Padding(
@@ -344,6 +345,13 @@ class AdminDashboardView extends StatelessWidget {
                   style: context.textTheme.titleMedium,
                 ),
                 const Spacer(),
+                IconButton(
+                  onPressed: () {
+                    context.read<AdminBloc>().add(const RerunExport());
+                  },
+                  icon: const Icon(Icons.refresh, size: 20),
+                  tooltip: 'Rerun Results',
+                ),
                 TextButton.icon(
                   onPressed: () {
                     launchUrl(Uri.parse(results.spreadsheetUrl));
@@ -354,7 +362,51 @@ class AdminDashboardView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            if (eliminated != null) ...[
+            if (results.hasTie) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Tie - Judge Decision Required',
+                            style: context.textTheme.labelSmall?.copyWith(
+                              color: Colors.orange.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            tiedParticipants.map((p) => p.name).join(', '),
+                            style: context.textTheme.titleMedium?.copyWith(
+                              color: Colors.orange.shade900,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${tiedParticipants.first.combinedScore} pts each',
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: Colors.orange.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else if (eliminated != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -410,6 +462,12 @@ class AdminDashboardView extends StatelessWidget {
               final index = entry.key;
               final result = entry.value;
               final isEliminated = result.id == results.eliminatedParticipantId;
+              final isTied = results.tiedParticipantIds.contains(result.id);
+              final highlightColor = isTied
+                  ? Colors.orange.shade700
+                  : isEliminated
+                      ? Colors.red.shade700
+                      : null;
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -421,7 +479,7 @@ class AdminDashboardView extends StatelessWidget {
                         '${index + 1}.',
                         style: context.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isEliminated ? Colors.red.shade700 : null,
+                          color: highlightColor,
                         ),
                       ),
                     ),
@@ -429,7 +487,7 @@ class AdminDashboardView extends StatelessWidget {
                       child: Text(
                         result.name,
                         style: context.textTheme.bodyMedium?.copyWith(
-                          color: isEliminated ? Colors.red.shade700 : null,
+                          color: highlightColor,
                           decoration: isEliminated
                               ? TextDecoration.lineThrough
                               : null,
@@ -486,7 +544,7 @@ class AdminDashboardView extends StatelessWidget {
               label: const Text('View Ballot Codes'),
             ),
             const SizedBox(height: 12),
-            if (event?.isVotingOpen == true)
+            if (event?.isVotingOpen == true || state.isClosingVoting)
               ElevatedButton.icon(
                 onPressed: state.isClosingVoting
                     ? null
@@ -611,6 +669,29 @@ class AdminDashboardView extends StatelessWidget {
   }
 
   void _confirmCloseVoting(BuildContext context, EventModel event) {
+    final state = context.read<AdminBloc>().state;
+    if (state is! AdminLoaded) return;
+
+    // Validate at least one audience and one judge ballot submitted
+    final errors = <String>[];
+    if (state.submittedAudienceCount == 0) {
+      errors.add('at least one audience ballot');
+    }
+    if (state.submittedJudgeCount == 0) {
+      errors.add('at least one judge ballot');
+    }
+
+    if (errors.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SelectableText(
+            'Need ${errors.join(" and ")} submitted before closing voting.',
+          ),
+        ),
+      );
+      return;
+    }
+
     // Validate bonus points are selected
     final missingBonusPoints = <String>[];
     if (event.largestDonationWinnerId == null ||
