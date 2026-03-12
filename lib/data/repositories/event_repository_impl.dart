@@ -36,6 +36,24 @@ class EventRepositoryImpl implements EventRepository {
   }
 
   @override
+  Future<void> updateDonationWinners(
+    String eventId, {
+    String? largestDonationWinnerId,
+    String? mostDonationsWinnerId,
+  }) async {
+    final updates = <String, dynamic>{};
+    if (largestDonationWinnerId != null) {
+      updates['largestDonationWinnerId'] = largestDonationWinnerId.isEmpty ? null : largestDonationWinnerId;
+    }
+    if (mostDonationsWinnerId != null) {
+      updates['mostDonationsWinnerId'] = mostDonationsWinnerId.isEmpty ? null : mostDonationsWinnerId;
+    }
+    if (updates.isNotEmpty) {
+      await _eventsCollection.doc(eventId).update(updates);
+    }
+  }
+
+  @override
   Future<void> closeVoting(String eventId) async {
     await _eventsCollection.doc(eventId).update({
       'status': EventStatus.closed.name,

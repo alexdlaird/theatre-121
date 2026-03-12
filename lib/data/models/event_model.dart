@@ -8,15 +8,21 @@ class EventModel extends Equatable {
   final String id;
   final String name;
   final List<ParticipantModel> participants;
+  final List<String> judges;
   final EventStatus status;
   final DateTime createdAt;
+  final String? largestDonationWinnerId;
+  final String? mostDonationsWinnerId;
 
   const EventModel({
     required this.id,
     required this.name,
     required this.participants,
+    this.judges = const [],
     required this.status,
     required this.createdAt,
+    this.largestDonationWinnerId,
+    this.mostDonationsWinnerId,
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json, String id) {
@@ -26,8 +32,13 @@ class EventModel extends Equatable {
       participants: (json['participants'] as List<dynamic>)
               .map((p) => ParticipantModel.fromJson(p as Map<String, dynamic>))
               .toList(),
+      judges: (json['judges'] as List<dynamic>?)
+              ?.map((j) => j as String)
+              .toList() ?? const [],
       status: EventStatus.values.byName(json['status'] as String),
       createdAt: (json['createdAt'] as Timestamp).toDate(),
+      largestDonationWinnerId: json['largestDonationWinnerId'] as String?,
+      mostDonationsWinnerId: json['mostDonationsWinnerId'] as String?,
     );
   }
 
@@ -35,8 +46,11 @@ class EventModel extends Equatable {
     return {
       'name': name,
       'participants': participants.map((p) => p.toJson()).toList(),
+      'judges': judges,
       'status': status.name,
       'createdAt': Timestamp.fromDate(createdAt),
+      'largestDonationWinnerId': largestDonationWinnerId,
+      'mostDonationsWinnerId': mostDonationsWinnerId,
     };
   }
 
@@ -48,18 +62,39 @@ class EventModel extends Equatable {
     String? id,
     String? name,
     List<ParticipantModel>? participants,
+    List<String>? judges,
     EventStatus? status,
     DateTime? createdAt,
+    String? largestDonationWinnerId,
+    String? mostDonationsWinnerId,
+    bool clearLargestDonationWinner = false,
+    bool clearMostDonationsWinner = false,
   }) {
     return EventModel(
       id: id ?? this.id,
       name: name ?? this.name,
       participants: participants ?? this.participants,
+      judges: judges ?? this.judges,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      largestDonationWinnerId: clearLargestDonationWinner
+          ? null
+          : (largestDonationWinnerId ?? this.largestDonationWinnerId),
+      mostDonationsWinnerId: clearMostDonationsWinner
+          ? null
+          : (mostDonationsWinnerId ?? this.mostDonationsWinnerId),
     );
   }
 
   @override
-  List<Object?> get props => [id, name, participants, status, createdAt];
+  List<Object?> get props => [
+        id,
+        name,
+        participants,
+        judges,
+        status,
+        createdAt,
+        largestDonationWinnerId,
+        mostDonationsWinnerId,
+      ];
 }

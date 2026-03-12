@@ -224,7 +224,7 @@ class _AudienceBallotViewState extends State<_AudienceBallotView> {
     }
 
     return AppScaffold(
-      title: "Ballot for '${state.event.name}'",
+      title: 'Ballot for "${state.event.name}"',
       actions: [
         if (votes.isNotEmpty)
           TextButton(

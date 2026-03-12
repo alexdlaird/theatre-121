@@ -7,11 +7,13 @@ class JudgeVote extends Equatable {
   final int singing;
   final int performance;
   final int audienceParticipation;
+  final String comments;
 
   const JudgeVote({
     required this.singing,
     required this.performance,
     required this.audienceParticipation,
+    this.comments = '',
   });
 
   factory JudgeVote.fromJson(Map<String, dynamic> json) {
@@ -19,6 +21,7 @@ class JudgeVote extends Equatable {
       singing: json['singing'] as int,
       performance: json['performance'] as int,
       audienceParticipation: json['audienceParticipation'] as int,
+      comments: json['comments'] as String? ?? '',
     );
   }
 
@@ -27,6 +30,7 @@ class JudgeVote extends Equatable {
       'singing': singing,
       'performance': performance,
       'audienceParticipation': audienceParticipation,
+      'comments': comments,
     };
   }
 
@@ -34,17 +38,19 @@ class JudgeVote extends Equatable {
     int? singing,
     int? performance,
     int? audienceParticipation,
+    String? comments,
   }) {
     return JudgeVote(
       singing: singing ?? this.singing,
       performance: performance ?? this.performance,
       audienceParticipation:
           audienceParticipation ?? this.audienceParticipation,
+      comments: comments ?? this.comments,
     );
   }
 
   @override
-  List<Object?> get props => [singing, performance, audienceParticipation];
+  List<Object?> get props => [singing, performance, audienceParticipation, comments];
 }
 
 class BallotModel extends Equatable {
@@ -56,6 +62,7 @@ class BallotModel extends Equatable {
   final Map<String, JudgeVote> judgeVotes;
   final DateTime createdAt;
   final DateTime? submittedAt;
+  final String? judgeName;
 
   const BallotModel({
     required this.code,
@@ -66,6 +73,7 @@ class BallotModel extends Equatable {
     this.judgeVotes = const {},
     required this.createdAt,
     this.submittedAt,
+    this.judgeName,
   });
 
   factory BallotModel.fromJson(Map<String, dynamic> json, String code) {
@@ -83,6 +91,7 @@ class BallotModel extends Equatable {
       submittedAt: json['submittedAt'] != null
           ? (json['submittedAt'] as Timestamp).toDate()
           : null,
+      judgeName: json['judgeName'] as String?,
     );
   }
 
@@ -96,6 +105,7 @@ class BallotModel extends Equatable {
       'createdAt': Timestamp.fromDate(createdAt),
       'submittedAt':
           submittedAt != null ? Timestamp.fromDate(submittedAt!) : null,
+      'judgeName': judgeName,
     };
   }
 
@@ -111,6 +121,7 @@ class BallotModel extends Equatable {
     Map<String, JudgeVote>? judgeVotes,
     DateTime? createdAt,
     DateTime? submittedAt,
+    String? judgeName,
   }) {
     return BallotModel(
       code: code ?? this.code,
@@ -121,6 +132,7 @@ class BallotModel extends Equatable {
       judgeVotes: judgeVotes ?? this.judgeVotes,
       createdAt: createdAt ?? this.createdAt,
       submittedAt: submittedAt ?? this.submittedAt,
+      judgeName: judgeName ?? this.judgeName,
     );
   }
 
@@ -134,5 +146,6 @@ class BallotModel extends Equatable {
         judgeVotes,
         createdAt,
         submittedAt,
+        judgeName,
       ];
 }

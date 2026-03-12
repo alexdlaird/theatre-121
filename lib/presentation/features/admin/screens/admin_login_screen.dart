@@ -34,8 +34,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final googleSignIn = GoogleSignIn(
         scopes: [
           'email',
-          'https://www.googleapis.com/auth/spreadsheets',
-          'https://www.googleapis.com/auth/documents',
+          'https://www.googleapis.com/auth/drive.file',
         ],
       );
 

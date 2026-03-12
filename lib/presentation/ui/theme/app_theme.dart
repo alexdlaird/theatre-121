@@ -39,6 +39,8 @@ class AppTheme {
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
+        ).copyWith(
+          alignment: Alignment.center,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -53,6 +55,8 @@ class AppTheme {
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
+        ).copyWith(
+          alignment: Alignment.center,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -125,6 +129,8 @@ class AppTheme {
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
+        ).copyWith(
+          alignment: Alignment.center,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -139,6 +145,8 @@ class AppTheme {
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
+        ).copyWith(
+          alignment: Alignment.center,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

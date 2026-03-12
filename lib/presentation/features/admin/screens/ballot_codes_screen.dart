@@ -174,12 +174,25 @@ class _BallotCodeCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    ballot.code,
-                    style: context.textTheme.headlineSmall?.copyWith(
-                      fontFamily: 'monospace',
-                      letterSpacing: 4,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        ballot.code,
+                        style: context.textTheme.headlineSmall?.copyWith(
+                          fontFamily: 'monospace',
+                          letterSpacing: 4,
+                        ),
+                      ),
+                      if (ballot.judgeName != null) ...[
+                        const SizedBox(width: 12),
+                        Text(
+                          ballot.judgeName!,
+                          style: context.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   if (ballot.submitted)
@@ -314,12 +327,12 @@ class _PrintPreviewScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              if (isJudge)
+              if (ballot.judgeName != null)
                 Text(
-                  'JUDGE',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
+                  ballot.judgeName!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               const SizedBox(height: 8),

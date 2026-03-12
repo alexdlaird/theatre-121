@@ -5,12 +5,12 @@ abstract class BallotRepository {
   Future<void> createBallots({
     required String eventId,
     required int audienceCount,
-    required int judgeCount,
+    required List<String> judgeNames,
   });
   Future<List<BallotModel>> createBallotsAndReturn({
     required String eventId,
     required int audienceCount,
-    required int judgeCount,
+    required List<String> judgeNames,
   });
   Future<void> updateBallot(BallotModel ballot);
   Future<void> submitBallot(String code);

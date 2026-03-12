@@ -186,7 +186,7 @@ class _JudgeBallotViewState extends State<_JudgeBallotView> {
         _currentParticipantIndex == participants.length - 1;
 
     return AppScaffold(
-      title: "Judge Ballot for '${state.event.name}'",
+      title: 'Judge Ballot for "${state.event.name}"',
       body: Column(
         children: [
           _buildProgressIndicator(context, participants.length, votes),
@@ -411,11 +411,35 @@ class _JudgeBallotViewState extends State<_JudgeBallotView> {
               vote.copyWith(audienceParticipation: value),
             ),
           ),
+          const SizedBox(height: 24),
+          _buildCommentsField(
+            context,
+            participant.id,
+            vote,
+          ),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCommentsField(
+    BuildContext context,
+    String participantId,
+    JudgeVote vote,
+  ) {
+    return _CommentsField(
+      key: ValueKey('comments_$participantId'),
+      participantId: participantId,
+      initialValue: vote.comments,
+      vote: vote,
+      onSave: (value) => _updateVote(
+        context,
+        participantId,
+        vote.copyWith(comments: value),
+      ),
     );
   }
 
@@ -463,5 +487,95 @@ class _JudgeBallotViewState extends State<_JudgeBallotView> {
           UpdateJudgeVote(participantId: participantId, vote: vote),
         );
   }
+}
 
+class _CommentsField extends StatefulWidget {
+  final String participantId;
+  final String initialValue;
+  final JudgeVote vote;
+  final ValueChanged<String> onSave;
+
+  const _CommentsField({
+    super.key,
+    required this.participantId,
+    required this.initialValue,
+    required this.vote,
+    required this.onSave,
+  });
+
+  @override
+  State<_CommentsField> createState() => _CommentsFieldState();
+}
+
+class _CommentsFieldState extends State<_CommentsField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  String _lastSavedValue = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+    _lastSavedValue = widget.initialValue;
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_CommentsField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue &&
+        widget.initialValue != _controller.text) {
+      _controller.text = widget.initialValue;
+      _lastSavedValue = widget.initialValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus && _controller.text != _lastSavedValue) {
+      _lastSavedValue = _controller.text;
+      widget.onSave(_controller.text);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.comment, color: context.colorScheme.primary),
+                const SizedBox(width: 12),
+                Text(
+                  'Comments',
+                  style: context.textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _controller,
+              focusNode: _focusNode,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Optional feedback for this participant...',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

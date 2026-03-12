@@ -40,22 +40,35 @@ class CreateEvent extends AdminEvent {
   final String name;
   final List<String> participantNames;
   final int audienceBallotCount;
-  final int judgeBallotCount;
+  final List<String> judgeNames;
 
   const CreateEvent({
     required this.name,
     required this.participantNames,
     required this.audienceBallotCount,
-    required this.judgeBallotCount,
+    required this.judgeNames,
   });
 
   @override
   List<Object?> get props =>
-      [name, participantNames, audienceBallotCount, judgeBallotCount];
+      [name, participantNames, audienceBallotCount, judgeNames];
 }
 
 class CloseVoting extends AdminEvent {
   const CloseVoting();
+}
+
+class UpdateDonationWinner extends AdminEvent {
+  final String? largestDonationWinnerId;
+  final String? mostDonationsWinnerId;
+
+  const UpdateDonationWinner({
+    this.largestDonationWinnerId,
+    this.mostDonationsWinnerId,
+  });
+
+  @override
+  List<Object?> get props => [largestDonationWinnerId, mostDonationsWinnerId];
 }
 
 abstract class AdminState extends Equatable {
@@ -141,6 +154,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     on<_BallotsUpdated>(_onBallotsUpdated);
     on<CreateEvent>(_onCreateEvent);
     on<CloseVoting>(_onCloseVoting);
+    on<UpdateDonationWinner>(_onUpdateDonationWinner);
   }
 
   void _onStartWatching(
@@ -224,6 +238,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
           id: '',
           name: event.name,
           participants: participants,
+          judges: event.judgeNames,
           status: EventStatus.open,
           createdAt: DateTime.now(),
         ),
@@ -232,7 +247,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       final ballots = await _ballotRepository.createBallotsAndReturn(
         eventId: newEvent.id,
         audienceCount: event.audienceBallotCount,
-        judgeCount: event.judgeBallotCount,
+        judgeNames: event.judgeNames,
       );
 
       // Emit AdminLoaded directly - streams will update with any changes
@@ -256,6 +271,27 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     try {
       await _eventRepository.closeVoting(currentState.currentEvent!.id);
       await _exportResultsToSheets(currentState.currentEvent!, currentState.ballots);
+      // Stream will automatically update the state
+    } catch (e) {
+      emit(AdminError(e.toString()));
+    }
+  }
+
+  Future<void> _onUpdateDonationWinner(
+    UpdateDonationWinner event,
+    Emitter<AdminState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! AdminLoaded || currentState.currentEvent == null) {
+      return;
+    }
+
+    try {
+      await _eventRepository.updateDonationWinners(
+        currentState.currentEvent!.id,
+        largestDonationWinnerId: event.largestDonationWinnerId,
+        mostDonationsWinnerId: event.mostDonationsWinnerId,
+      );
       // Stream will automatically update the state
     } catch (e) {
       emit(AdminError(e.toString()));

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 import 'package:theatre_121/presentation/features/admin/bloc/admin_bloc.dart';
 import 'package:theatre_121/config/app_routes.dart';
+import 'package:theatre_121/data/models/models.dart';
 
 class AdminDashboardView extends StatelessWidget {
   const AdminDashboardView({super.key});
@@ -92,6 +93,8 @@ class AdminDashboardView extends StatelessWidget {
             _buildCurrentEventCard(context, event, state),
             const SizedBox(height: 16),
             _buildBallotStatsCard(context, state),
+            const SizedBox(height: 16),
+            _buildDonationWinnersCard(context, event),
             const SizedBox(height: 16),
             _buildActionsCard(context, state),
           ],
@@ -305,7 +308,7 @@ class AdminDashboardView extends StatelessWidget {
                     : const Icon(Icons.lock),
                 label: Text(state.isClosingVoting
                     ? ''
-                    : 'Close Voting & Export to Sheets'),
+                    : 'Close Voting'),
               ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -319,6 +322,91 @@ class AdminDashboardView extends StatelessWidget {
     );
   }
 
+  Widget _buildDonationWinnersCard(BuildContext context, EventModel event) {
+    final participants = List<ParticipantModel>.from(event.participants)
+      ..sort((a, b) => a.order.compareTo(b.order));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bonus Points',
+              style: context.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            _buildDonationDropdown(
+              context,
+              label: 'Largest Donation',
+              icon: Icons.attach_money,
+              participants: participants,
+              selectedId: event.largestDonationWinnerId,
+              onChanged: (value) {
+                context.read<AdminBloc>().add(
+                      UpdateDonationWinner(largestDonationWinnerId: value ?? ''),
+                    );
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildDonationDropdown(
+              context,
+              label: 'Most Donations',
+              icon: Icons.favorite,
+              participants: participants,
+              selectedId: event.mostDonationsWinnerId,
+              onChanged: (value) {
+                context.read<AdminBloc>().add(
+                      UpdateDonationWinner(mostDonationsWinnerId: value ?? ''),
+                    );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDonationDropdown(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required List<ParticipantModel> participants,
+    required String? selectedId,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: context.colorScheme.primary),
+        const SizedBox(width: 12),
+        Text(label, style: context.textTheme.bodyLarge),
+        const SizedBox(width: 16),
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: selectedId,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            hint: const Text('Select participant'),
+            items: [
+              const DropdownMenuItem<String>(
+                value: '',
+                child: Text('None'),
+              ),
+              ...participants.map((p) => DropdownMenuItem<String>(
+                    value: p.id,
+                    child: Text(p.displayName),
+                  )),
+            ],
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
   void _navigateToCreateEvent(BuildContext context) {
     context.go(AppRoutes.adminCreateEvent);
   }
@@ -329,7 +417,7 @@ class AdminDashboardView extends StatelessWidget {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Close Voting?'),
         content: const Text(
-          'This will close voting and export results to Google Sheets. No more votes will be accepted.',
+          'This will close voting and export ballot data to Google Sheets. No more votes will be accepted. The results from the Google Sheets formulas will then be shown here.',
         ),
         actions: [
           Row(
@@ -351,7 +439,7 @@ class AdminDashboardView extends StatelessWidget {
                     backgroundColor: context.colorScheme.error,
                     foregroundColor: context.colorScheme.onError,
                   ),
-                  child: const Text('Close & Export'),
+                  child: const Text('Close Voting'),
                 ),
               ),
             ],

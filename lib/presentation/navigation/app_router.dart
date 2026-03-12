@@ -70,8 +70,8 @@ class AppRouter {
               final adminState = context.read<AdminBloc>().state;
               String? previousEventName;
               List<String>? previousParticipants;
+              List<String>? previousJudges;
               int? previousAudienceCount;
-              int? previousJudgeCount;
               bool hasExistingEvent = false;
 
               if (adminState is AdminLoaded && adminState.currentEvent != null) {
@@ -80,16 +80,16 @@ class AppRouter {
                 previousParticipants = adminState.currentEvent!.participants
                     .map((p) => p.name)
                     .toList();
+                previousJudges = adminState.currentEvent!.judges;
                 previousAudienceCount = adminState.audienceBallotCount;
-                previousJudgeCount = adminState.judgeBallotCount;
               }
 
               return CreateEventScreen(
                 hasExistingEvent: hasExistingEvent,
                 previousEventName: previousEventName,
                 previousParticipants: previousParticipants,
+                previousJudges: previousJudges,
                 previousAudienceCount: previousAudienceCount,
-                previousJudgeCount: previousJudgeCount,
               );
             },
           ),

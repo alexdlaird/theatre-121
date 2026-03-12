@@ -12,16 +12,16 @@ class CreateEventScreen extends StatefulWidget {
   final bool hasExistingEvent;
   final String? previousEventName;
   final List<String>? previousParticipants;
+  final List<String>? previousJudges;
   final int? previousAudienceCount;
-  final int? previousJudgeCount;
 
   const CreateEventScreen({
     super.key,
     this.hasExistingEvent = false,
     this.previousEventName,
     this.previousParticipants,
+    this.previousJudges,
     this.previousAudienceCount,
-    this.previousJudgeCount,
   });
 
   @override
@@ -32,7 +32,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _eventNameController;
   late final TextEditingController _audienceCountController;
-  late final TextEditingController _judgeCountController;
+  final List<TextEditingController> _judgeControllers = [];
   final List<TextEditingController> _participantControllers = [];
 
   @override
@@ -46,10 +46,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _audienceCountController = TextEditingController(
       text: (widget.previousAudienceCount ?? 100).toString(),
     );
-    _judgeCountController = TextEditingController(
-      text: (widget.previousJudgeCount ?? 5).toString(),
-    );
 
+    // Initialize judges
+    if (widget.previousJudges != null && widget.previousJudges!.isNotEmpty) {
+      for (final name in widget.previousJudges!) {
+        _judgeControllers.add(TextEditingController(text: name));
+      }
+    } else {
+      // Start with 5 empty judge slots
+      for (int i = 0; i < 5; i++) {
+        _judgeControllers.add(TextEditingController());
+      }
+    }
+
+    // Initialize participants
     if (widget.previousParticipants != null &&
         widget.previousParticipants!.isNotEmpty) {
       // Randomize previous participants
@@ -70,11 +80,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void dispose() {
     _eventNameController.dispose();
     _audienceCountController.dispose();
-    _judgeCountController.dispose();
+    for (final controller in _judgeControllers) {
+      controller.dispose();
+    }
     for (final controller in _participantControllers) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _addJudgeField() {
+    setState(() {
+      _judgeControllers.add(TextEditingController());
+    });
+  }
+
+  void _removeJudgeField(int index) {
+    if (_judgeControllers.length > 1) {
+      setState(() {
+        _judgeControllers[index].dispose();
+        _judgeControllers.removeAt(index);
+      });
+    }
   }
 
   void _addParticipantField() {
@@ -95,6 +122,26 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void _createEvent() {
     if (!_formKey.currentState!.validate()) return;
 
+    // Validate judges
+    final emptyJudgeIndices = <int>[];
+    for (int i = 0; i < _judgeControllers.length; i++) {
+      if (_judgeControllers[i].text.trim().isEmpty) {
+        emptyJudgeIndices.add(i + 1);
+      }
+    }
+
+    if (emptyJudgeIndices.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please fill in all judge names (missing: ${emptyJudgeIndices.join(", ")})',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Validate participants
     final emptyParticipantIndices = <int>[];
     for (int i = 0; i < _participantControllers.length; i++) {
       if (_participantControllers[i].text.trim().isEmpty) {
@@ -113,18 +160,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return;
     }
 
+    final judgeNames = _judgeControllers
+        .map((c) => c.text.trim())
+        .toList();
     final participantNames = _participantControllers
         .map((c) => c.text.trim())
         .toList();
 
     if (widget.hasExistingEvent) {
-      _confirmCreateEvent(participantNames);
+      _confirmCreateEvent(judgeNames, participantNames);
     } else {
-      _submitEvent(participantNames);
+      _submitEvent(judgeNames, participantNames);
     }
   }
 
-  void _confirmCreateEvent(List<String> participantNames) {
+  void _confirmCreateEvent(List<String> judgeNames, List<String> participantNames) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -146,7 +196,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.of(dialogContext).pop();
-                    _submitEvent(participantNames);
+                    _submitEvent(judgeNames, participantNames);
                   },
                   child: const Text('Continue'),
                 ),
@@ -158,15 +208,49 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     );
   }
 
-  void _submitEvent(List<String> participantNames) {
+  void _submitEvent(List<String> judgeNames, List<String> participantNames) {
     context.read<AdminBloc>().add(
           CreateEvent(
             name: _eventNameController.text.trim(),
             participantNames: participantNames,
             audienceBallotCount: int.parse(_audienceCountController.text),
-            judgeBallotCount: int.parse(_judgeCountController.text),
+            judgeNames: judgeNames,
           ),
         );
+  }
+
+  Widget _buildJudgesList() {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _judgeControllers.length,
+      itemBuilder: (context, index) => _buildJudgeRow(context, index),
+    );
+  }
+
+  Widget _buildJudgeRow(BuildContext context, int index) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: _judgeControllers[index],
+              decoration: InputDecoration(
+                hintText: 'Judge ${index + 1} name',
+                isDense: true,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _removeJudgeField(index),
+            icon: const Icon(Icons.delete_outline),
+            color: context.colorScheme.error,
+            tooltip: 'Remove judge',
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildParticipantsList() {
@@ -285,51 +369,42 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 },
               ),
               const SizedBox(height: 24),
+              TextFormField(
+                controller: _audienceCountController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Audience Ballots',
+                  hintText: '100',
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Required';
+                  }
+                  if (int.tryParse(value) == null) {
+                    return 'Invalid number';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 32),
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _audienceCountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'Audience Ballots',
-                        hintText: '100',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Required';
-                        }
-                        if (int.tryParse(value) == null) {
-                          return 'Invalid number';
-                        }
-                        return null;
-                      },
-                    ),
+                  Text(
+                    'Judges',
+                    style: context.textTheme.titleMedium,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _judgeCountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'Judge Ballots',
-                        hintText: '5',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Required';
-                        }
-                        if (int.tryParse(value) == null) {
-                          return 'Invalid number';
-                        }
-                        return null;
-                      },
-                    ),
+                  IconButton(
+                    onPressed: _addJudgeField,
+                    icon: const Icon(Icons.add_circle),
+                    color: context.colorScheme.primary,
+                    tooltip: 'Add judge',
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              _buildJudgesList(),
               const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
