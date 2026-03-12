@@ -186,7 +186,7 @@ class _JudgeBallotViewState extends State<_JudgeBallotView> {
         _currentParticipantIndex == participants.length - 1;
 
     return AppScaffold(
-      title: 'Judge Ballot',
+      title: "Judge Ballot for '${state.event.name}'",
       body: Column(
         children: [
           // Progress indicator

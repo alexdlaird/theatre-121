@@ -6,6 +6,7 @@ import 'package:theatre_121/config/app_routes.dart';
 class AppScaffold extends StatelessWidget {
   final Widget body;
   final String? title;
+  final String? browserTitle;
   final int currentIndex;
   final bool showBottomNav;
   final List<Widget>? actions;
@@ -15,6 +16,7 @@ class AppScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.title,
+    this.browserTitle,
     this.currentIndex = 0,
     this.showBottomNav = false,
     this.actions,
@@ -23,7 +25,12 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final pageTitle = browserTitle ?? title ?? "Come Out Singin'";
+
+    return Title(
+      color: Theme.of(context).primaryColor,
+      title: pageTitle,
+      child: Scaffold(
       appBar: appBar ??
           (title != null
               ? AppBar(
@@ -63,6 +70,7 @@ class AppScaffold extends StatelessWidget {
               ],
             )
           : null,
+      ),
     );
   }
 
