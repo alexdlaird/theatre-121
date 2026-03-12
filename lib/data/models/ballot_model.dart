@@ -16,9 +16,9 @@ class JudgeVote extends Equatable {
 
   factory JudgeVote.fromJson(Map<String, dynamic> json) {
     return JudgeVote(
-      singing: json['singing'] as int? ?? 0,
-      performance: json['performance'] as int? ?? 0,
-      audienceParticipation: json['audienceParticipation'] as int? ?? 0,
+      singing: json['singing'] as int,
+      performance: json['performance'] as int,
+      audienceParticipation: json['audienceParticipation'] as int,
     );
   }
 
@@ -75,12 +75,10 @@ class BallotModel extends Equatable {
       type: type,
       eventId: json['eventId'] as String,
       submitted: json['submitted'] as bool,
-      audienceVotes: (json['audienceVotes'] as Map<String, dynamic>?)
-              ?.map((k, v) => MapEntry(k, v as int)) ??
-          {},
-      judgeVotes: (json['judgeVotes'] as Map<String, dynamic>?)?.map((k, v) =>
-              MapEntry(k, JudgeVote.fromJson(v as Map<String, dynamic>))) ??
-          {},
+      audienceVotes: (json['audienceVotes'] as Map<String, dynamic>)
+              .map((k, v) => MapEntry(k, v as int)),
+      judgeVotes: (json['judgeVotes'] as Map<String, dynamic>).map((k, v) =>
+              MapEntry(k, JudgeVote.fromJson(v as Map<String, dynamic>))),
       createdAt: (json['createdAt'] as Timestamp).toDate(),
       submittedAt: json['submittedAt'] != null
           ? (json['submittedAt'] as Timestamp).toDate()

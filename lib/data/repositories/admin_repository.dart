@@ -22,12 +22,10 @@ class AdminRepository {
     final doc = await _firestore.collection('config').doc('admins').get();
 
     if (!doc.exists) {
-      _cachedAdminEmails = [];
-    } else {
-      final data = doc.data();
-      final emails = data?['emails'] as List<dynamic>? ?? [];
-      _cachedAdminEmails = emails.map((e) => e.toString().toLowerCase()).toList();
+      throw StateError('Config document /config/admins does not exist');
     }
+    final emails = doc.data()!['emails'] as List<dynamic>;
+    _cachedAdminEmails = emails.map((e) => e.toString().toLowerCase()).toList();
 
     _cacheTime = DateTime.now();
     return _cachedAdminEmails!;
