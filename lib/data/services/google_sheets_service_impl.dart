@@ -8,9 +8,12 @@ import 'package:theatre_121/domain/services/google_sheets_service.dart';
 class GoogleSheetsServiceImpl implements GoogleSheetsService {
 
   Future<AuthClient> _getAuthClient() async {
-    final account = googleSignIn.currentUser ?? await googleSignIn.signInSilently();
+    var account = googleSignIn.currentUser;
+    account ??= await googleSignIn.signInSilently();
+    // If silent sign-in fails (e.g., after hot restart), prompt for sign-in
+    account ??= await googleSignIn.signIn();
     if (account == null) {
-      throw StateError('Not signed in to Google');
+      throw StateError('Google sign-in required to export spreadsheet. Please try again.');
     }
 
     final auth = await account.authentication;

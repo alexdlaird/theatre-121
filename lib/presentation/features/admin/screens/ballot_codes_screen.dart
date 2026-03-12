@@ -119,7 +119,7 @@ class _BallotCodesScreenState extends State<BallotCodesScreen> {
                           audienceBallots,
                           judgeBallots,
                         ),
-                        tooltip: 'Export Ballots as PDF',
+                        tooltip: 'Export ballots as PDF',
                       ),
               ],
             ),

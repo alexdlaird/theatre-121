@@ -28,6 +28,9 @@ class EventModel extends Equatable {
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json, String id) {
+    // Helper to convert empty strings to null
+    String? nullIfEmpty(String? value) => value?.isEmpty == true ? null : value;
+
     return EventModel(
       id: id,
       name: json['name'] as String,
@@ -39,9 +42,9 @@ class EventModel extends Equatable {
               .toList() ?? const [],
       status: EventStatus.values.byName(json['status'] as String),
       createdAt: (json['createdAt'] as Timestamp).toDate(),
-      largestDonationWinnerId: json['largestDonationWinnerId'] as String?,
-      mostDonationsWinnerId: json['mostDonationsWinnerId'] as String?,
-      spreadsheetUrl: json['spreadsheetUrl'] as String?,
+      largestDonationWinnerId: nullIfEmpty(json['largestDonationWinnerId'] as String?),
+      mostDonationsWinnerId: nullIfEmpty(json['mostDonationsWinnerId'] as String?),
+      spreadsheetUrl: nullIfEmpty(json['spreadsheetUrl'] as String?),
     );
   }
 

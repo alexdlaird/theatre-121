@@ -58,10 +58,11 @@ class AdminDashboardView extends StatelessWidget {
               SnackBar(content: SelectableText(state.message)),
             );
           } else if (state is AdminLoaded && state.votingResults != null) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const SelectableText('Spreadsheet generated successfully'),
-                duration: const Duration(seconds: 10),
+                duration: const Duration(seconds: 4),
                 action: SnackBarAction(
                   label: 'Open Sheet',
                   onPressed: () {
@@ -350,7 +351,7 @@ class AdminDashboardView extends StatelessWidget {
                     context.read<AdminBloc>().add(const RerunExport());
                   },
                   icon: const Icon(Icons.refresh, size: 20),
-                  tooltip: 'Rerun Results',
+                  tooltip: 'Rerun results',
                 ),
                 TextButton.icon(
                   onPressed: () {
