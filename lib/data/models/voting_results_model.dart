@@ -5,7 +5,7 @@ class ParticipantResult extends Equatable {
   final String name;
   final int audienceTotal;
   final int judgeTotal;
-  final int combinedScore;
+  final double combinedScore;
 
   const ParticipantResult({
     required this.id,
@@ -21,7 +21,7 @@ class ParticipantResult extends Equatable {
       name: json['name'] as String,
       audienceTotal: json['audienceTotal'] as int,
       judgeTotal: json['judgeTotal'] as int,
-      combinedScore: json['combinedScore'] as int,
+      combinedScore: (json['combinedScore'] as num).toDouble(),
     );
   }
 

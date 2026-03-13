@@ -116,7 +116,7 @@ class AdminDashboardView extends StatelessWidget {
           _showExportSuccess(context, spreadsheetUrl);
         }
       } else if (state.closingProgress == ClosingProgress.refetchComplete) {
-        SnackBarHelper.show(context, 'Calculated results refetched from spreadsheet');
+        SnackBarHelper.show(context, 'Refetched results from spreadsheet');
       }
     }
   }
@@ -128,7 +128,7 @@ class AdminDashboardView extends StatelessWidget {
   void _showExportSuccess(BuildContext context, String spreadsheetUrl) {
     SnackBarHelper.show(
       context,
-      'Spreadsheet generated successfully',
+      'Spreadsheet generated successfully & results fetched',
       seconds: 6,
       type: SnackType.info,
       action: SnackBarAction(
