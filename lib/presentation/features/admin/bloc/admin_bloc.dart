@@ -334,7 +334,6 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     }
 
     final eventData = currentState.currentEvent!;
-    final ballotData = currentState.ballots;
     final isAlreadyClosed = !eventData.isVotingOpen;
 
     try {
@@ -350,7 +349,11 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         emit(currentState);
       }
 
-      // Step 2: Export ballots to Google Sheets
+      // Step 2: Fetch all ballots AFTER voting is closed to ensure we capture
+      // any last-second submissions (no new submissions possible after close)
+      final ballotData = await _ballotRepository.getEventBallots(eventData.id);
+
+      // Step 3: Export ballots to Google Sheets
       currentState = currentState.copyWith(closingProgress: ClosingProgress.exportingBallots);
       emit(currentState);
       final spreadsheetUrl = await _sheetsService.createResultsSpreadsheet(
@@ -359,7 +362,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       );
       await _eventRepository.updateSpreadsheetUrl(eventData.id, spreadsheetUrl);
 
-      // Step 3: Fetch results from spreadsheet
+      // Step 4: Fetch results from spreadsheet
       currentState = currentState.copyWith(closingProgress: ClosingProgress.fetchingResults);
       emit(currentState);
       final results = await _fetchResults(
@@ -367,10 +370,10 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         spreadsheetUrl: spreadsheetUrl,
       );
 
-      // Step 4: Save results to Firestore
+      // Step 5: Save results to Firestore
       await _eventRepository.updateVotingResults(eventData.id, results);
 
-      // Step 5: Update local state immediately and complete (stream will eventually sync)
+      // Step 6: Update local state immediately and complete (stream will eventually sync)
       final updatedEvent = eventData.copyWith(
         status: EventStatus.closed,
         spreadsheetUrl: spreadsheetUrl,
