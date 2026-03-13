@@ -3,13 +3,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:logging/logging.dart';
+import 'package:theatre_121/core/log_service.dart';
+import 'package:theatre_121/core/sentry_service.dart';
 import 'package:theatre_121/firebase_options.dart';
 import 'package:theatre_121/presentation/navigation/app_router.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 
+final _log = Logger('main');
+
 void main() async {
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize logging first
+  LogService().init();
 
   // Ignore this known Flutter web hot restart bug, which doesn't play nice
   // with Firestore's event listeners
@@ -20,6 +28,15 @@ void main() async {
     }
     FlutterError.presentError(details);
   };
+
+  // Initialize Sentry for error reporting in release mode
+  if (!kDebugMode) {
+    try {
+      await SentryService().init();
+    } catch (e) {
+      _log.severe('Sentry initialization failed', e);
+    }
+  }
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logging/logging.dart';
 import 'package:theatre_121/config/app_routes.dart';
 import 'package:theatre_121/data/models/models.dart';
 import 'package:theatre_121/data/repositories/ballot_repository_impl.dart';
 import 'package:theatre_121/presentation/features/vote/screens/audience_ballot_screen.dart';
 import 'package:theatre_121/presentation/features/vote/screens/judge_ballot_screen.dart';
+
+final _log = Logger('ballot_validator_screen');
 
 class BallotValidatorScreen extends StatefulWidget {
   final String ballotCode;
@@ -44,7 +47,8 @@ class _BallotValidatorScreenState extends State<BallotValidatorScreen> {
         _ballot = ballot;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to validate ballot', e, stackTrace);
       if (!mounted) return;
       context.go('${AppRoutes.home}?error=Error validating ballot');
     }

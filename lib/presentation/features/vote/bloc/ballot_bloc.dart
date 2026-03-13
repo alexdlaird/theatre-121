@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:logging/logging.dart';
 import 'package:theatre_121/data/models/models.dart';
 import 'package:theatre_121/domain/repositories/ballot_repository.dart';
 import 'package:theatre_121/domain/repositories/event_repository.dart';
+
+final _log = Logger('ballot_bloc');
 
 abstract class BallotEvent extends Equatable {
   const BallotEvent();
@@ -162,7 +165,8 @@ class BallotBloc extends Bloc<BallotEvent, BallotState> {
     try {
       await _ballotRepository.updateBallot(ballotToWrite);
       _lastWrittenBallot = ballotToWrite;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to persist ballot', e, stackTrace);
       add(_PersistError(e.toString()));
     } finally {
       _isWriting = false;
@@ -205,7 +209,8 @@ class BallotBloc extends Bloc<BallotEvent, BallotState> {
       }
 
       emit(BallotLoaded(ballot: ballot, event: eventModel));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to load ballot', e, stackTrace);
       emit(BallotError(e.toString()));
     }
   }
@@ -294,7 +299,8 @@ class BallotBloc extends Bloc<BallotEvent, BallotState> {
       _lastWrittenBallot = currentState.ballot;
       await _ballotRepository.submitBallot(currentState.ballot.code);
       emit(const BallotSubmitted());
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to submit ballot', e, stackTrace);
       emit(BallotError(e.toString()));
     }
   }

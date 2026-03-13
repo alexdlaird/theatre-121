@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logging/logging.dart';
+import 'package:theatre_121/core/google_auth_service.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 import 'package:theatre_121/presentation/ui/utils/snack_bar_helper.dart';
 import 'package:theatre_121/data/repositories/admin_repository.dart';
 import 'package:theatre_121/config/app_routes.dart';
-import 'package:theatre_121/config/google_sign_in_config.dart';
+
+final _log = Logger('admin_login_screen');
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -16,6 +19,7 @@ class AdminLoginScreen extends StatefulWidget {
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _adminRepository = AdminRepository();
+  final _authService = GoogleAuthService();
   bool _isLoading = false;
 
   void _showErrorSnackbar(String message) {
@@ -27,7 +31,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final googleUser = await googleSignIn.signIn();
+      final googleUser = await _authService.googleSignIn.signIn();
       if (googleUser == null) {
         setState(() => _isLoading = false);
         return;
@@ -36,7 +40,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final email = googleUser.email;
       final isAdmin = await _adminRepository.isAdmin(email);
       if (!isAdmin) {
-        await googleSignIn.signOut();
+        await _authService.googleSignIn.signOut();
         setState(() => _isLoading = false);
         _showErrorSnackbar('You are not authorized as an admin.');
         return;
@@ -53,7 +57,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       if (mounted) {
         context.go(AppRoutes.admin);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to sign in with Google', e, stackTrace);
       setState(() => _isLoading = false);
       _showErrorSnackbar('An error occurred while trying to log in.');
     }

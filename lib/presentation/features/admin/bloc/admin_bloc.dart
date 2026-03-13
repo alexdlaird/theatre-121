@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
+import 'package:logging/logging.dart';
 import 'package:theatre_121/data/models/models.dart';
 import 'package:theatre_121/domain/repositories/event_repository.dart';
 import 'package:theatre_121/domain/repositories/ballot_repository.dart';
 import 'package:theatre_121/domain/services/google_sheets_service.dart';
+
+final _log = Logger('admin_bloc');
 
 abstract class AdminEvent extends Equatable {
   const AdminEvent();
@@ -315,7 +318,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
 
       // Emit AdminLoaded directly - streams will update with any changes
       emit(AdminLoaded(currentEvent: newEvent, ballots: ballots));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to create event', e, stackTrace);
       emit(AdminError(e.toString()));
     }
   }
@@ -376,7 +380,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         currentEvent: updatedEvent,
         closingProgress: ClosingProgress.exportComplete,
       ));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to close voting', e, stackTrace);
       if (state is AdminLoaded) {
         emit((state as AdminLoaded).copyWith(closingProgress: ClosingProgress.none));
       }
@@ -421,7 +426,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         currentEvent: updatedEvent,
         closingProgress: ClosingProgress.refetchComplete,
       ));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to refetch results', e, stackTrace);
       if (state is AdminLoaded) {
         emit((state as AdminLoaded).copyWith(closingProgress: ClosingProgress.none));
       }
@@ -493,7 +499,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         mostDonationsWinnerId: event.mostDonationsWinnerId,
       );
       // Stream will automatically update the state
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to update donation winners', e, stackTrace);
       emit(AdminError(e.toString()));
     }
   }

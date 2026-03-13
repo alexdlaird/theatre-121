@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logging/logging.dart';
 import 'package:theatre_121/presentation/ui/layout/app_scaffold.dart';
 import 'package:theatre_121/presentation/ui/theme/app_theme.dart';
 import 'package:theatre_121/presentation/ui/utils/snack_bar_helper.dart';
 import 'package:theatre_121/config/app_routes.dart';
 import 'package:theatre_121/data/repositories/ballot_repository_impl.dart';
+
+final _log = Logger('ballot_entry_screen');
 
 class BallotEntryScreen extends StatefulWidget {
   final String? errorMessage;
@@ -65,7 +68,8 @@ class _BallotEntryScreenState extends State<BallotEntryScreen> {
       }
 
       context.go('${AppRoutes.vote}?ballot=$code');
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log.severe('Failed to validate ballot code', e, stackTrace);
       if (!mounted) return;
       SnackBarHelper.show(context, 'Error: $e', type: SnackType.error);
       setState(() => _isValidating = false);
