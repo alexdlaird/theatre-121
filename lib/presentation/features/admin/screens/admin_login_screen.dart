@@ -54,6 +54,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
       await FirebaseAuth.instance.signInWithCredential(credential);
 
+      // Initialize and cache the auth client for Google Sheets operations
+      await _authService.initAuthClient();
+
       if (mounted) {
         context.go(AppRoutes.admin);
       }
